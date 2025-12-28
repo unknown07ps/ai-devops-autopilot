@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI DevOps Autopilot Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="app"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let currentTab = 'overview';
+        let autoRefresh = false;
+        let refreshInterval = null;
+
+        async function fetchData() {
+            try {
+                const [stats, incidents, anomalies, services] = await Promise.all([
+                    fetch(`${API_BASE}/api/stats`).then(r => r.ok ? r.json() : null),
+                    fetch(`${API_BASE}/api/incidents`).then(r => r.ok ? r.json() : { incidents: [] }),
+                    fetch(`${API_BASE}/api/anomalies`).then(r => r.ok ? r.json() : { anomalies: [] }),
+                    fetch(`${API_BASE}/api/services`).then(r => r.ok ? r.json() : { services: [] })
+                ]);
+
+                render({ stats, incidents: incidents.incidents, anomalies: anomalies.anomalies, services: services.services });
+            } catch (error) {
+                renderError(error.message);
+            }
+        }
+
+        function renderError(message) {
+            document.getElementById('app').innerHTML = `
+                <div class="min-h-screen flex items-center justify-center p-6">
+                    <div class="bg-white rounded-xl shadow-lg p-8 max-w-2xl w-full">
+                        <div class="text-center">
+                            <svg class="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                            </svg>
+                            <h2 class="text-2xl font-bold text-gray-900 mb-4">Cannot Connect to API</h2>
+                            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-6 text-left">
+                                <p class="font-semibold text-gray-900 mb-3">Quick Setup:</p>
+                                <ol class="space-y-2 text-sm text-gray-700">
+                                    <li><strong>1. Start API:</strong> <code class="bg-gray-200 px-2 py-1 rounded">uvicorn src.main:app --reload</code></li>
+                                    <li><strong>2. Start Worker:</strong> <code class="bg-gray-200 px-2 py-1 rounded">python src/worker.py</code></li>
+                                    <li><strong>3. Generate Data:</strong> <code class="bg-gray-200 px-2 py-1 rounded">python test_dashboard.py</code></li>
+                                    <li><strong>4. Refresh this page</strong></li>
+                                </ol>
+                            </div>
+                            <button onclick="fetchData()" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700">
+                                Retry Connection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function render(data) {
+            const { stats, incidents, anomalies, services } = data;
+            
+            const app = document.getElementById('app');
+            app.innerHTML = `
+                <div class="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+                    <!-- Header -->
+                    <div class="bg-white border-b border-gray-200 shadow-sm">
+                        <div class="max-w-7xl mx-auto px-6 py-6">
+                            <div class="flex items-center justify-between mb-6">
+                                <div>
+                                    <h1 class="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                                        <span class="bg-gradient-to-br from-blue-600 to-purple-600 p-3 rounded-xl text-white">🧠</span>
+                                        AI DevOps Autopilot
+                                    </h1>
+                                    <p class="text-gray-600 mt-1">Autonomous incident detection and response</p>
+                                </div>
+                                <div class="flex gap-3">
+                                    <button onclick="toggleAutoRefresh()" class="${autoRefresh ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'} px-4 py-2 rounded-lg font-medium">
+                                        Auto-refresh ${autoRefresh ? 'ON' : 'OFF'}
+                                    </button>
+                                    <button onclick="fetchData()" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700">
+                                        Refresh
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Tabs -->
+                            <div class="flex gap-2">
+                                <button onclick="switchTab('overview')" class="${currentTab === 'overview' ? 'bg-white text-blue-600 border-t-2 border-blue-600' : 'text-gray-600'} px-6 py-2 rounded-t-lg font-medium">
+                                    Overview
+                                </button>
+                                <button onclick="switchTab('incidents')" class="${currentTab === 'incidents' ? 'bg-white text-blue-600 border-t-2 border-blue-600' : 'text-gray-600'} px-6 py-2 rounded-t-lg font-medium">
+                                    Incidents
+                                </button>
+                                <button onclick="switchTab('anomalies')" class="${currentTab === 'anomalies' ? 'bg-white text-blue-600 border-t-2 border-blue-600' : 'text-gray-600'} px-6 py-2 rounded-t-lg font-medium">
+                                    Anomalies
+                                </button>
+                                <button onclick="switchTab('services')" class="${currentTab === 'services' ? 'bg-white text-blue-600 border-t-2 border-blue-600' : 'text-gray-600'} px-6 py-2 rounded-t-lg font-medium">
+                                    Services
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Content -->
+                    <div class="max-w-7xl mx-auto px-6 py-8">
+                        ${currentTab === 'overview' ? renderOverview(stats, incidents) : ''}
+                        ${currentTab === 'incidents' ? renderIncidents(incidents) : ''}
+                        ${currentTab === 'anomalies' ? renderAnomalies(anomalies) : ''}
+                        ${currentTab === 'services' ? renderServices(services) : ''}
+                        
+                        <div class="text-center text-sm text-gray-500 mt-8">
+                            Last updated: ${new Date().toLocaleTimeString()}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderOverview(stats, incidents) {
+            if (!stats) return '<div class="text-center py-12 text-gray-600">Loading...</div>';
+            
+            return `
+                <div class="space-y-6">
+                    <!-- Stats Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div class="text-gray-600 text-sm font-medium mb-2">🚨 Active Incidents</div>
+                            <div class="text-3xl font-bold text-gray-900">${stats.active_incidents}</div>
+                            <div class="text-sm text-gray-500 mt-1">Requiring attention</div>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div class="text-gray-600 text-sm font-medium mb-2">⚠️ Critical Anomalies</div>
+                            <div class="text-3xl font-bold text-gray-900">${stats.critical_anomalies}</div>
+                            <div class="text-sm text-gray-500 mt-1">Last 24 hours</div>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div class="text-gray-600 text-sm font-medium mb-2">💚 Healthy Services</div>
+                            <div class="text-3xl font-bold text-gray-900">${stats.healthy_services}/${stats.total_services}</div>
+                            <div class="text-sm text-gray-500 mt-1">${stats.uptime_percent}% uptime</div>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div class="text-gray-600 text-sm font-medium mb-2">⏱️ Avg Resolution</div>
+                            <div class="text-3xl font-bold text-gray-900">${stats.avg_resolution_time_minutes}m</div>
+                            <div class="text-sm text-gray-500 mt-1">Time to resolve</div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Incidents -->
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900 mb-4">Recent Incidents</h2>
+                        ${incidents && incidents.length > 0 ? `
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                ${incidents.slice(0, 6).map(inc => `
+                                    <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-lg transition-shadow">
+                                        <div class="flex items-start justify-between mb-3">
+                                            <div>
+                                                <div class="font-semibold text-gray-900">${inc.service}</div>
+                                                <div class="text-sm text-gray-500">${formatTime(inc.timestamp)}</div>
+                                            </div>
+                                            <span class="px-3 py-1 rounded-full text-xs font-semibold ${getSeverityClass(inc.severity)}">
+                                                ${inc.severity}
+                                            </span>
+                                        </div>
+                                        <div class="text-sm text-gray-700 mb-3">${inc.root_cause}</div>
+                                        <div class="flex items-center justify-between text-xs text-gray-500">
+                                            <span>${inc.anomaly_count} anomalies</span>
+                                            <span>${inc.confidence}% confidence</span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : `
+                            <div class="bg-white rounded-lg border border-gray-200 p-12 text-center">
+                                <div class="text-5xl mb-4">✅</div>
+                                <p class="text-gray-600 font-medium">No incidents detected</p>
+                                <p class="text-sm text-gray-500 mt-2">All systems operating normally</p>
+                            </div>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderIncidents(incidents) {
+            return `
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900 mb-4">All Incidents (${incidents ? incidents.length : 0})</h2>
+                    ${incidents && incidents.length > 0 ? `
+                        <div class="space-y-3">
+                            ${incidents.map(inc => `
+                                <div class="bg-white rounded-lg border border-gray-200 p-5 hover:shadow-lg transition-shadow">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-3 mb-2">
+                                                <span class="text-2xl">${inc.severity === 'critical' ? '🔴' : '🟠'}</span>
+                                                <div>
+                                                    <div class="font-semibold text-gray-900">${inc.service}</div>
+                                                    <div class="text-sm text-gray-500">${formatTime(inc.timestamp)}</div>
+                                                </div>
+                                            </div>
+                                            <div class="text-sm text-gray-700 mb-2">${inc.root_cause}</div>
+                                            <div class="flex gap-4 text-xs text-gray-500">
+                                                <span>${inc.anomaly_count} anomalies</span>
+                                                <span>${inc.confidence}% confidence</span>
+                                                <span>${inc.status}</span>
+                                            </div>
+                                        </div>
+                                        <span class="px-3 py-1 rounded-full text-xs font-semibold ${getSeverityClass(inc.severity)}">
+                                            ${inc.severity}
+                                        </span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : '<div class="bg-white rounded-lg border border-gray-200 p-12 text-center text-gray-600">No incidents</div>'}
+                </div>
+            `;
+        }
+
+        function renderAnomalies(anomalies) {
+            return `
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900 mb-4">Recent Anomalies (${anomalies ? anomalies.length : 0})</h2>
+                    ${anomalies && anomalies.length > 0 ? `
+                        <div class="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="bg-gray-50 border-b">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Service</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Metric</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Current</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Baseline</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Deviation</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Severity</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y">
+                                    ${anomalies.map(a => `
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-6 py-4 text-sm font-medium">${a.service}</td>
+                                            <td class="px-6 py-4 text-sm">${a.metric_name}</td>
+                                            <td class="px-6 py-4 text-sm font-semibold text-red-600">${a.current_value.toFixed(2)}</td>
+                                            <td class="px-6 py-4 text-sm">${a.baseline_mean.toFixed(2)}</td>
+                                            <td class="px-6 py-4 text-sm font-semibold text-red-600">+${a.deviation_percent.toFixed(1)}%</td>
+                                            <td class="px-6 py-4"><span class="px-2 py-1 rounded text-xs font-semibold ${getSeverityClass(a.severity)}">${a.severity}</span></td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    ` : '<div class="bg-white rounded-lg border border-gray-200 p-12 text-center text-gray-600">No anomalies</div>'}
+                </div>
+            `;
+        }
+
+        function renderServices(services) {
+            return `
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900 mb-4">Service Health (${services ? services.length : 0})</h2>
+                    ${services && services.length > 0 ? `
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            ${services.map(s => `
+                                <div class="bg-white rounded-lg border border-gray-200 p-6">
+                                    <div class="flex items-center justify-between mb-4">
+                                        <div>
+                                            <h3 class="font-bold text-gray-900">${s.name}</h3>
+                                            <div class="flex items-center gap-2 mt-1">
+                                                <div class="w-2 h-2 rounded-full ${s.status === 'healthy' ? 'bg-green-500' : 'bg-orange-500'}"></div>
+                                                <span class="text-sm text-gray-600">${s.status}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    ${s.metrics ? `
+                                        <div class="grid grid-cols-2 gap-3 mb-4">
+                                            ${s.metrics.latency_ms ? `
+                                                <div class="bg-blue-50 rounded-lg p-3">
+                                                    <div class="text-xs text-gray-600">Latency</div>
+                                                    <div class="text-lg font-bold">${s.metrics.latency_ms}ms</div>
+                                                </div>
+                                            ` : ''}
+                                            ${s.metrics.error_rate_percent !== undefined ? `
+                                                <div class="bg-red-50 rounded-lg p-3">
+                                                    <div class="text-xs text-gray-600">Error Rate</div>
+                                                    <div class="text-lg font-bold">${s.metrics.error_rate_percent}%</div>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    ` : ''}
+                                    <div class="flex justify-between text-sm text-gray-600">
+                                        <span>${s.anomaly_count} anomalies</span>
+                                        <span>${s.incident_count} incidents</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : '<div class="bg-white rounded-lg border border-gray-200 p-12 text-center text-gray-600">No services monitored</div>'}
+                </div>
+            `;
+        }
+
+        function getSeverityClass(severity) {
+            const classes = {
+                critical: 'bg-red-100 text-red-800 border border-red-300',
+                high: 'bg-orange-100 text-orange-800 border border-orange-300',
+                medium: 'bg-yellow-100 text-yellow-800 border border-yellow-300',
+                low: 'bg-blue-100 text-blue-800 border border-blue-300'
+            };
+            return classes[severity] || classes.medium;
+        }
+
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = Math.floor((now - date) / 60000);
+            if (diff < 1) return 'Just now';
+            if (diff < 60) return `${diff}m ago`;
+            if (diff < 1440) return `${Math.floor(diff / 60)}h ago`;
+            return date.toLocaleDateString();
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            fetchData();
+        }
+
+        function toggleAutoRefresh() {
+            autoRefresh = !autoRefresh;
+            if (autoRefresh) {
+                refreshInterval = setInterval(fetchData, 10000);
+            } else {
+                clearInterval(refreshInterval);
+            }
+            fetchData();
+        }
+
+        // Initialize
+        fetchData();
+    </script>
+</body>
+</html>
