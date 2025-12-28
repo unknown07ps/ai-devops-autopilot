@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI DevOps Autopilot - Phase 2 Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
+    <div id="app"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let currentTab = 'overview';
+        let autoRefresh = false;
+        let refreshInterval = null;
+
+        async function fetchData() {
+            try {
+                const [stats, incidents, pendingActions, actionHistory, learningStats, config] = await Promise.all([
+                    fetch(`${API_BASE}/api/stats`).then(r => r.ok ? r.json() : null).catch(() => null),
+                    fetch(`${API_BASE}/api/incidents?limit=10`).then(r => r.ok ? r.json() : { incidents: [] }).catch(() => ({ incidents: [] })),
+                    fetch(`${API_BASE}/api/v2/actions/pending`).then(r => r.ok ? r.json() : { actions: [] }).catch(() => ({ actions: [] })),
+                    fetch(`${API_BASE}/api/v2/actions/history?limit=20`).then(r => r.ok ? r.json() : { actions: [] }).catch(() => ({ actions: [] })),
+                    fetch(`${API_BASE}/api/v2/learning/stats`).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+                    fetch(`${API_BASE}/api/v2/config`).then(r => r.ok ? r.json() : {}).catch(() => ({}))
+                ]);
+
+                render({
+                    stats,
+                    incidents: incidents.incidents || [],
+                    pendingActions: pendingActions.actions || [],
+                    actionHistory: actionHistory.actions || [],
+                    learningStats: learningStats || {},
+                    config: config || {}
+                });
+            } catch (error) {
+                renderError(error.message);
+            }
+        }
+
+        function renderError(message) {
+            document.getElementById('app').innerHTML = `
+                <div class="min-h-screen flex items-center justify-center p-6">
+                    <div class="bg-white rounded-xl shadow-lg p-8 max-w-2xl w-full">
+                        <div class="text-center">
+                            <div class="text-6xl mb-4">⚠️</div>
+                            <h2 class="text-2xl font-bold text-gray-900 mb-4">Cannot Connect to API</h2>
+                            <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                                <p class="text-sm text-red-800 font-mono">${message}</p>
+                            </div>
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6 text-left">
+                                <p class="font-semibold text-gray-900 mb-3">Setup Instructions:</p>
+                                <ol class="space-y-2 text-sm text-gray-700">
+                                    <li><strong>1. Start API:</strong> <code class="bg-gray-200 px-2 py-1 rounded">uvicorn src.main:app --reload</code></li>
+                                    <li><strong>2. Start Phase 2 Worker:</strong> <code class="bg-gray-200 px-2 py-1 rounded">python src/worker_phase2.py</code></li>
+                                    <li><strong>3. Generate Test Data:</strong> <code class="bg-gray-200 px-2 py-1 rounded">python test_phase2.py</code></li>
+                                    <li><strong>4. Refresh this page</strong></li>
+                                </ol>
+                            </div>
+                            <button onclick="fetchData()" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700">
+                                Retry Connection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function render(data) {
+            const { stats, incidents, pendingActions, actionHistory, learningStats, config } = data;
+            
+            const app = document.getElementById('app');
+            app.innerHTML = `
+                <!-- Header -->
+                <div class="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
+                    <div class="max-w-7xl mx-auto px-6 py-4">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h1 class="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                                    <span class="bg-gradient-to-br from-blue-600 to-purple-600 p-2 rounded-xl text-white">🧠</span>
+                                    AI DevOps Autopilot
+                                    <span class="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-bold">PHASE 2</span>
+                                </h1>
+                                <p class="text-sm text-gray-600 mt-1">Autonomous detection, analysis & supervised remediation</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="toggleAutoRefresh()" class="${autoRefresh ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'} px-3 py-2 rounded-lg text-sm font-medium">
+                                    ${autoRefresh ? '🔄 ON' : '⏸️ OFF'}
+                                </button>
+                                <button onclick="fetchData()" class="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
+                                    🔄 Refresh
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Tabs -->
+                        <div class="flex gap-2 border-b border-gray-200 overflow-x-auto">
+                            <button onclick="switchTab('overview')" class="${currentTab === 'overview' ? 'bg-white text-blue-600 border-b-2 border-blue-600 -mb-px' : 'text-gray-600 hover:text-gray-900'} px-4 py-2 font-medium text-sm whitespace-nowrap">
+                                📊 Overview
+                            </button>
+                            <button onclick="switchTab('actions')" class="${currentTab === 'actions' ? 'bg-white text-blue-600 border-b-2 border-blue-600 -mb-px' : 'text-gray-600 hover:text-gray-900'} px-4 py-2 font-medium text-sm whitespace-nowrap">
+                                ⚡ Actions ${pendingActions.length > 0 ? `<span class="ml-1 bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full">${pendingActions.length}</span>` : ''}
+                            </button>
+                            <button onclick="switchTab('history')" class="${currentTab === 'history' ? 'bg-white text-blue-600 border-b-2 border-blue-600 -mb-px' : 'text-gray-600 hover:text-gray-900'} px-4 py-2 font-medium text-sm whitespace-nowrap">
+                                📜 History
+                            </button>
+                            <button onclick="switchTab('learning')" class="${currentTab === 'learning' ? 'bg-white text-blue-600 border-b-2 border-blue-600 -mb-px' : 'text-gray-600 hover:text-gray-900'} px-4 py-2 font-medium text-sm whitespace-nowrap">
+                                🧠 Learning
+                            </button>
+                            <button onclick="switchTab('config')" class="${currentTab === 'config' ? 'bg-white text-blue-600 border-b-2 border-blue-600 -mb-px' : 'text-gray-600 hover:text-gray-900'} px-4 py-2 font-medium text-sm whitespace-nowrap">
+                                ⚙️ Config
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Content -->
+                <div class="max-w-7xl mx-auto px-6 py-6">
+                    ${currentTab === 'overview' ? renderOverview(stats, incidents, pendingActions, learningStats) : ''}
+                    ${currentTab === 'actions' ? renderActions(pendingActions) : ''}
+                    ${currentTab === 'history' ? renderHistory(actionHistory) : ''}
+                    ${currentTab === 'learning' ? renderLearning(learningStats) : ''}
+                    ${currentTab === 'config' ? renderConfig(config) : ''}
+                    
+                    <div class="text-center text-sm text-gray-500 mt-8">
+                        ⏰ Last updated: ${new Date().toLocaleTimeString()} • 
+                        <a href="http://localhost:8000/dashboard" target="_blank" class="text-blue-600 hover:underline">Phase 1 Dashboard</a> • 
+                        <a href="http://localhost:8000/docs" target="_blank" class="text-blue-600 hover:underline">API Docs</a>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderOverview(stats, incidents, pendingActions, learningStats) {
+            return `
+                <div class="space-y-6">
+                    <!-- Stats Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="bg-white rounded-xl shadow-sm border-2 border-gray-200 p-6 hover:shadow-lg transition-shadow">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="text-gray-600 text-sm font-medium">⚡ Pending Actions</div>
+                                ${pendingActions.length > 0 ? '<span class="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></span>' : ''}
+                            </div>
+                            <div class="text-4xl font-bold ${pendingActions.length > 0 ? 'text-orange-600' : 'text-gray-400'}">${pendingActions.length}</div>
+                            <div class="text-sm text-gray-500 mt-1">Awaiting approval</div>
+                        </div>
+                        
+                        <div class="bg-white rounded-xl shadow-sm border-2 border-gray-200 p-6 hover:shadow-lg transition-shadow">
+                            <div class="text-gray-600 text-sm font-medium mb-2">📚 Incidents Learned</div>
+                            <div class="text-4xl font-bold text-blue-600">${learningStats.total_incidents_learned || 0}</div>
+                            <div class="text-sm text-gray-500 mt-1">Building knowledge</div>
+                        </div>
+                        
+                        <div class="bg-white rounded-xl shadow-sm border-2 border-gray-200 p-6 hover:shadow-lg transition-shadow">
+                            <div class="text-gray-600 text-sm font-medium mb-2">🚨 Active Incidents</div>
+                            <div class="text-4xl font-bold ${stats?.active_incidents > 0 ? 'text-red-600' : 'text-green-600'}">${stats?.active_incidents || 0}</div>
+                            <div class="text-sm text-gray-500 mt-1">Requiring attention</div>
+                        </div>
+                        
+                        <div class="bg-white rounded-xl shadow-sm border-2 border-gray-200 p-6 hover:shadow-lg transition-shadow">
+                            <div class="text-gray-600 text-sm font-medium mb-2">🖥️ Services Monitored</div>
+                            <div class="text-4xl font-bold text-purple-600">${learningStats.services_monitored || 0}</div>
+                            <div class="text-sm text-gray-500 mt-1">Under supervision</div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Incidents -->
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900 mb-4">Recent Incidents with Actions</h2>
+                        ${incidents && incidents.length > 0 ? `
+                            <div class="space-y-3">
+                                ${incidents.slice(0, 5).map(inc => `
+                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-5 hover:shadow-xl transition-all">
+                                        <div class="flex items-start justify-between mb-3">
+                                            <div>
+                                                <div class="font-bold text-lg text-gray-900">${inc.service}</div>
+                                                <div class="text-sm text-gray-500">${formatTime(inc.timestamp)}</div>
+                                            </div>
+                                            <span class="px-3 py-1 rounded-full text-xs font-bold ${getSeverityClass(inc.severity)}">
+                                                ${inc.severity?.toUpperCase() || 'UNKNOWN'}
+                                            </span>
+                                        </div>
+                                        <div class="text-sm text-gray-700 mb-3">${inc.root_cause}</div>
+                                        ${inc.recommended_actions && inc.recommended_actions.length > 0 ? `
+                                            <div class="mt-3 pt-3 border-t border-gray-200">
+                                                <div class="text-xs font-semibold text-gray-600 mb-2">💡 Recommended Actions:</div>
+                                                ${inc.recommended_actions.slice(0, 2).map(action => `
+                                                    <div class="text-xs text-gray-600 ml-2 mb-1">• ${action.action} (${action.risk} risk)</div>
+                                                `).join('')}
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : `
+                            <div class="bg-white rounded-lg border-2 border-gray-200 p-12 text-center">
+                                <div class="text-6xl mb-4">✅</div>
+                                <p class="text-xl text-gray-600 font-semibold">No recent incidents</p>
+                                <p class="text-sm text-gray-500 mt-2">Run <code class="bg-gray-100 px-2 py-1 rounded">python test_phase2.py</code> to generate test data</p>
+                            </div>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderActions(pendingActions) {
+            return `
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900 mb-4">⚡ Pending Actions - Awaiting Approval</h2>
+                    ${pendingActions && pendingActions.length > 0 ? `
+                        <div class="space-y-4">
+                            ${pendingActions.map(action => `
+                                <div class="bg-white rounded-lg border-2 ${action.risk === 'low' ? 'border-green-300' : action.risk === 'high' ? 'border-red-300' : 'border-orange-300'} p-6 shadow-sm">
+                                    <div class="flex items-start justify-between mb-4">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-3 mb-2">
+                                                <h3 class="text-lg font-bold text-gray-900">${action.action_type.replace(/_/g, ' ').toUpperCase()}</h3>
+                                                <span class="px-3 py-1 rounded-full text-xs font-bold ${getRiskClass(action.risk)}">
+                                                    ${action.risk?.toUpperCase() || 'UNKNOWN'} RISK
+                                                </span>
+                                            </div>
+                                            <div class="text-sm text-gray-600 mb-1">🖥️ Service: <span class="font-semibold">${action.service}</span></div>
+                                            <div class="text-sm text-gray-600">⏰ Proposed: ${formatTime(action.proposed_at)}</div>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button onclick="approveAction('${action.id}')" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors">
+                                                ✓ Approve
+                                            </button>
+                                            <button onclick="rejectAction('${action.id}')" class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-red-700 transition-colors">
+                                                ✗ Reject
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="bg-gray-50 rounded-lg p-4 mb-3">
+                                        <div class="text-sm font-semibold text-gray-700 mb-1">💭 Reasoning:</div>
+                                        <div class="text-sm text-gray-600">${action.reasoning}</div>
+                                    </div>
+                                    ${action.params && Object.keys(action.params).length > 0 ? `
+                                        <div class="text-xs text-gray-500">
+                                            <span class="font-semibold">Parameters:</span> <code class="bg-gray-100 px-2 py-1 rounded">${JSON.stringify(action.params)}</code>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : `
+                        <div class="bg-white rounded-lg border-2 border-gray-200 p-12 text-center">
+                            <div class="text-6xl mb-4">✅</div>
+                            <p class="text-xl text-gray-600 font-semibold">No pending actions</p>
+                            <p class="text-sm text-gray-500 mt-2">Actions will appear here when incidents are detected</p>
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+
+        function renderHistory(actionHistory) {
+            return `
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900 mb-4">📜 Action History</h2>
+                    ${actionHistory && actionHistory.length > 0 ? `
+                        <div class="bg-white rounded-lg border-2 border-gray-200 overflow-hidden shadow-sm">
+                            <div class="overflow-x-auto">
+                                <table class="w-full">
+                                    <thead class="bg-gray-50 border-b-2 border-gray-200">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Action</th>
+                                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Service</th>
+                                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Status</th>
+                                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Risk</th>
+                                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Proposed</th>
+                                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Approved By</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-200">
+                                        ${actionHistory.map((action, idx) => `
+                                            <tr class="hover:bg-gray-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}">
+                                                <td class="px-4 py-3 text-sm font-semibold">${action.action_type.replace(/_/g, ' ')}</td>
+                                                <td class="px-4 py-3 text-sm">${action.service}</td>
+                                                <td class="px-4 py-3">
+                                                    <span class="px-2 py-1 rounded text-xs font-bold ${getStatusClass(action.status)}">
+                                                        ${action.status}
+                                                    </span>
+                                                </td>
+                                                <td class="px-4 py-3">
+                                                    <span class="px-2 py-1 rounded text-xs font-bold ${getRiskClass(action.risk)}">
+                                                        ${action.risk}
+                                                    </span>
+                                                </td>
+                                                <td class="px-4 py-3 text-sm text-gray-600">${formatTime(action.proposed_at)}</td>
+                                                <td class="px-4 py-3 text-sm">${action.approved_by || '-'}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="bg-white rounded-lg border-2 border-gray-200 p-12 text-center">
+                            <div class="text-6xl mb-4">📜</div>
+                            <p class="text-xl text-gray-600">No action history yet</p>
+                            <p class="text-sm text-gray-500 mt-2">Approved actions will appear here</p>
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+
+        function renderLearning(learningStats) {
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-xl font-bold text-gray-900">🧠 Learning & Intelligence</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
+                            <div class="text-sm opacity-90 mb-2">Total Incidents Learned</div>
+                            <div class="text-4xl font-bold">${learningStats.total_incidents_learned || 0}</div>
+                        </div>
+                        
+                        <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
+                            <div class="text-sm opacity-90 mb-2">Actions Recorded</div>
+                            <div class="text-4xl font-bold">${learningStats.total_actions_recorded || 0}</div>
+                        </div>
+                        
+                        <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
+                            <div class="text-sm opacity-90 mb-2">Services Monitored</div>
+                            <div class="text-4xl font-bold">${learningStats.services_monitored || 0}</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg border-2 border-gray-200 p-6">
+                        <h3 class="text-lg font-bold text-gray-900 mb-4">💡 How Learning Works</h3>
+                        <div class="space-y-3 text-sm text-gray-700">
+                            <div class="flex items-start gap-3">
+                                <span class="text-2xl">🔍</span>
+                                <div>
+                                    <div class="font-semibold">Pattern Recognition</div>
+                                    <div class="text-gray-600">System learns from similar incidents and their successful resolutions</div>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span class="text-2xl">📊</span>
+                                <div>
+                                    <div class="font-semibold">Action Effectiveness</div>
+                                    <div class="text-gray-600">Tracks which actions work best for different types of incidents</div>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span class="text-2xl">🎯</span>
+                                <div>
+                                    <div class="font-semibold">Smart Recommendations</div>
+                                    <div class="text-gray-600">Suggests actions based on historical success rates and similarity scores</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${learningStats.total_incidents_learned === 0 ? `
+                        <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-6">
+                            <div class="flex items-start gap-3">
+                                <span class="text-3xl">💡</span>
+                                <div>
+                                    <div class="font-bold text-gray-900 mb-2">Start Building Knowledge</div>
+                                    <div class="text-sm text-gray-700 mb-3">
+                                        The system learns from incidents over time. To start:
+                                    </div>
+                                    <ol class="text-sm text-gray-700 space-y-1 ml-4 list-decimal">
+                                        <li>Run <code class="bg-white px-2 py-1 rounded">python test_phase2.py</code> to generate test incidents</li>
+                                        <li>Approve and execute actions when they appear in the Actions tab</li>
+                                        <li>System will learn from outcomes and improve recommendations</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function renderConfig(config) {
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-xl font-bold text-gray-900">⚙️ System Configuration</h2>
+                    
+                    <div class="bg-white rounded-lg border-2 border-gray-200 p-6">
+                        <h3 class="text-lg font-bold text-gray-900 mb-4">Automation Settings</h3>
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                <div>
+                                    <div class="font-semibold text-gray-900">Auto-Approve Low Risk Actions</div>
+                                    <div class="text-sm text-gray-600">Automatically approve and execute low-risk actions</div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-2xl">${config.auto_approve_low_risk ? '✅' : '❌'}</span>
+                                    <span class="font-bold ${config.auto_approve_low_risk ? 'text-green-600' : 'text-gray-400'}">
+                                        ${config.auto_approve_low_risk ? 'ENABLED' : 'DISABLED'}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                <div>
+                                    <div class="font-semibold text-gray-900">Dry Run Mode</div>
+                                    <div class="text-sm text-gray-600">Simulate actions without making actual changes</div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-2xl">${config.dry_run_mode ? '🔒' : '⚡'}</span>
+                                    <span class="font-bold ${config.dry_run_mode ? 'text-blue-600' : 'text-orange-600'}">
+                                        ${config.dry_run_mode ? 'SAFE MODE' : 'LIVE'}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                <div>
+                                    <div class="font-semibold text-gray-900">Learning System</div>
+                                    <div class="text-sm text-gray-600">Record and learn from incident outcomes</div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-2xl">${config.learning_enabled ? '🧠' : '💤'}</span>
+                                    <span class="font-bold ${config.learning_enabled ? 'text-purple-600' : 'text-gray-400'}">
+                                        ${config.learning_enabled ? 'ACTIVE' : 'INACTIVE'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg border-2 border-gray-200 p-6">
+                        <h3 class="text-lg font-bold text-gray-900 mb-4">Limits & Thresholds</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="p-4 bg-gray-50 rounded-lg">
+                                <div class="text-sm text-gray-600 mb-1">Action Cooldown</div>
+                                <div class="text-2xl font-bold text-gray-900">${config.action_cooldown_seconds || 300}s</div>
+                                <div class="text-xs text-gray-500 mt-1">Time between actions for same service</div>
+                            </div>
+                            <div class="p-4 bg-gray-50 rounded-lg">
+                                <div class="text-sm text-gray-600 mb-1">Max Concurrent Actions</div>
+                                <div class="text-2xl font-bold text-gray-900">${config.max_concurrent_actions || 3}</div>
+                                <div class="text-xs text-gray-500 mt-1">Maximum parallel executions</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-6">
+                        <div class="flex items-start gap-3">
+                            <span class="text-3xl">⚠️</span>
+                            <div>
+                                <div class="font-bold text-gray-900 mb-2">Production Deployment</div>
+                                <div class="text-sm text-gray-700 space-y-2">
+                                    <p>To enable production mode, update your <code class="bg-white px-2 py-1 rounded">.env</code> file:</p>
+                                    <ul class="list-disc ml-4 space-y-1">
+                                        <li><code class="bg-white px-2 py-1 rounded">DRY_RUN_MODE=false</code> - Enable actual action execution</li>
+                                        <li><code class="bg-white px-2 py-1 rounded">AUTO_APPROVE_LOW_RISK=true</code> - Enable automation</li>
+                                    </ul>
+                                    <p class="mt-3 text-orange-700 font-semibold">⚠️ Only enable in production after thorough testing!</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Helper functions
+        function getSeverityClass(severity) {
+            const classes = {
+                critical: 'bg-red-100 text-red-800 border border-red-300',
+                high: 'bg-orange-100 text-orange-800 border border-orange-300',
+                medium: 'bg-yellow-100 text-yellow-800 border border-yellow-300',
+                low: 'bg-blue-100 text-blue-800 border border-blue-300'
+            };
+            return classes[severity] || classes.medium;
+        }
+
+        function getRiskClass(risk) {
+            const classes = {
+                low: 'bg-green-100 text-green-800 border border-green-300',
+                medium: 'bg-orange-100 text-orange-800 border border-orange-300',
+                high: 'bg-red-100 text-red-800 border border-red-300'
+            };
+            return classes[risk] || classes.medium;
+        }
+
+        function getStatusClass(status) {
+            const classes = {
+                pending: 'bg-yellow-100 text-yellow-800',
+                approved: 'bg-blue-100 text-blue-800',
+                executing: 'bg-purple-100 text-purple-800',
+                success: 'bg-green-100 text-green-800',
+                failed: 'bg-red-100 text-red-800',
+                rejected: 'bg-gray-100 text-gray-800'
+            };
+            return classes[status] || classes.pending;
+        }
+
+        function formatTime(timestamp) {
+            if (!timestamp) return 'Unknown';
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = Math.floor((now - date) / 60000);
+            if (diff < 1) return 'Just now';
+            if (diff < 60) return `${diff}m ago`;
+            if (diff < 1440) return `${Math.floor(diff / 60)}h ago`;
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            fetchData();
+        }
+
+        function toggleAutoRefresh() {
+            autoRefresh = !autoRefresh;
+            if (autoRefresh) {
+                refreshInterval = setInterval(fetchData, 10000);
+            } else {
+                clearInterval(refreshInterval);
+            }
+            fetchData();
+        }
+
+        async function approveAction(actionId) {
+            if (!confirm('Approve this action for execution?')) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/v2/actions/approve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action_id: actionId,
+                        approved_by: 'dashboard_user',
+                        notes: 'Approved via dashboard'
+                    })
+                });
+                
+                if (response.ok) {
+                    alert('✅ Action approved! Check worker logs for execution status.');
+                    fetchData();
+                } else {
+                    alert('❌ Failed to approve action');
+                }
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+
+        async function rejectAction(actionId) {
+            if (!confirm('Reject this action?')) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/v2/actions/reject`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action_id: actionId,
+                        approved_by: 'dashboard_user',
+                        notes: 'Rejected via dashboard'
+                    })
+                });
+                
+                if (response.ok) {
+                    alert('✅ Action rejected');
+                    fetchData();
+                } else {
+                    alert('❌ Failed to reject action');
+                }
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', fetchData);
+        fetchData();
+    </script>
+</body>
+</html>
