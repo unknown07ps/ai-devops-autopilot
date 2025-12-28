@@ -1,217 +1,17 @@
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
-from datetime import datetime
+from typing import List, Dict, Optional
+from datetime import datetime, timedelta
 import redis
 import json
-from typing import List, Dict, Any, Optional
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+router = APIRouter(prefix="/api", tags=["dashboard"])
 
-app = FastAPI(
-    title="AI DevOps Autopilot",
-    version="0.2.0",
-    description="Autonomous incident detection, analysis, and response"
-)
-
-# CORS middleware for dashboard
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Redis connection for event streaming
+# Redis connection
 redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"))
 
-# Data Models
-class MetricPoint(BaseModel):
-    timestamp: datetime
-    metric_name: str
-    value: float
-    labels: Dict[str, str] = {}
-
-class LogEntry(BaseModel):
-    timestamp: datetime
-    level: str
-    message: str
-    service: str
-    labels: Dict[str, str] = {}
-
-class DeploymentEvent(BaseModel):
-    timestamp: datetime
-    service: str
-    version: str
-    status: str  # success, failed, in_progress
-    metadata: Dict[str, Any] = {}
-
-# Health check
-@app.get("/")
-async def root():
-    return {
-        "status": "operational",
-        "service": "AI DevOps Autopilot",
-        "version": "0.2.0",
-        "features": [
-            "Real-time anomaly detection",
-            "AI-powered root cause analysis",
-            "Slack notifications",
-            "Web dashboard"
-        ]
-    }
-
-@app.get("/health")
-async def health():
-    try:
-        redis_client.ping()
-        return {"status": "healthy", "redis": "connected"}
-    except:
-        return {"status": "degraded", "redis": "disconnected"}
-
-# Ingestion endpoints
-@app.post("/ingest/metrics")
-async def ingest_metrics(metrics: List[MetricPoint], background_tasks: BackgroundTasks):
-    """
-    Ingest metrics in Prometheus-compatible format
-    """
-    try:
-        # Store in Redis for processing
-        for metric in metrics:
-            event = {
-                "type": "metric",
-                "data": metric.model_dump_json(),
-                "timestamp": metric.timestamp.isoformat()
-            }
-            try:
-                # Try using streams first
-                redis_client.xadd("events:metrics", event)
-            except redis.exceptions.ResponseError as e:
-                if 'unknown command' in str(e).lower():
-                    # Fallback to simple list if streams not available
-                    metric_key = f"metric:{metric.labels.get('service', 'unknown')}:{metric.timestamp.timestamp()}"
-                    redis_client.setex(metric_key, 3600, metric.model_dump_json())
-                else:
-                    raise
-        
-        # Trigger anomaly detection in background
-        background_tasks.add_task(check_for_anomalies, metrics)
-        
-        return {
-            "status": "accepted",
-            "count": len(metrics),
-            "message": "Metrics queued for analysis"
-        }
-    except Exception as e:
-        print(f"[ERROR] Metrics ingestion failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/ingest/logs")
-async def ingest_logs(logs: List[LogEntry], background_tasks: BackgroundTasks):
-    """
-    Ingest application logs
-    """
-    try:
-        error_count = 0
-        for log in logs:
-            event = {
-                "type": "log",
-                "data": log.model_dump_json(),
-                "timestamp": log.timestamp.isoformat()
-            }
-            try:
-                redis_client.xadd("events:logs", event)
-            except redis.exceptions.ResponseError as e:
-                if 'unknown command' in str(e).lower():
-                    # Fallback - just store in a simple list
-                    redis_client.lpush(f"logs:{log.service}", log.model_dump_json())
-                    redis_client.ltrim(f"logs:{log.service}", 0, 999)
-                else:
-                    raise
-            
-            if log.level in ["ERROR", "CRITICAL"]:
-                error_count += 1
-        
-        # If we see error spikes, trigger investigation
-        if error_count > 5:
-            background_tasks.add_task(investigate_error_spike, logs)
-        
-        return {
-            "status": "accepted",
-            "count": len(logs),
-            "errors_detected": error_count
-        }
-    except Exception as e:
-        print(f"[ERROR] Log ingestion failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/ingest/deployment")
-async def ingest_deployment(deployment: DeploymentEvent, background_tasks: BackgroundTasks):
-    """
-    Track deployment events
-    """
-    try:
-        event = {
-            "type": "deployment",
-            "data": deployment.model_dump_json(),
-            "timestamp": deployment.timestamp.isoformat()
-        }
-        try:
-            redis_client.xadd("events:deployments", event)
-        except redis.exceptions.ResponseError as e:
-            if 'unknown command' not in str(e).lower():
-                raise
-        
-        # Store deployment in a sorted set for quick lookups
-        redis_client.zadd(
-            f"deployments:{deployment.service}",
-            {deployment.version: deployment.timestamp.timestamp()}
-        )
-        
-        # Monitor the deployment
-        background_tasks.add_task(monitor_deployment, deployment)
-        
-        return {
-            "status": "tracked",
-            "service": deployment.service,
-            "version": deployment.version
-        }
-    except Exception as e:
-        print(f"[ERROR] Deployment ingestion failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Background processing functions
-async def check_for_anomalies(metrics: List[MetricPoint]):
-    """
-    Check metrics for anomalies - placeholder for now
-    """
-    print(f"[DETECTION] Checking {len(metrics)} metrics for anomalies...")
-
-async def investigate_error_spike(logs: List[LogEntry]):
-    """
-    Investigate error log spikes
-    """
-    print(f"[ALERT] Error spike detected, investigating...")
-
-async def monitor_deployment(deployment: DeploymentEvent):
-    """
-    Monitor deployment health post-deploy
-    """
-    print(f"[MONITOR] Tracking deployment {deployment.service}:{deployment.version}")
-
-
-# ============================================================================
-# DASHBOARD API ENDPOINTS (Inline to avoid import issues)
-# ============================================================================
-
-from datetime import timedelta
-
-@app.get("/api/stats")
+@router.get("/stats")
 async def get_dashboard_stats():
     """
     Get high-level dashboard statistics
@@ -275,7 +75,7 @@ async def get_dashboard_stats():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/incidents")
+@router.get("/incidents")
 async def get_incidents(
     status: Optional[str] = None,
     service: Optional[str] = None,
@@ -351,7 +151,7 @@ async def get_incidents(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/anomalies")
+@router.get("/anomalies")
 async def get_anomalies(
     service: Optional[str] = None,
     severity: Optional[str] = None,
@@ -412,7 +212,7 @@ async def get_anomalies(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/services")
+@router.get("/services")
 async def get_services():
     """
     Get status of all monitored services
@@ -498,43 +298,103 @@ async def get_services():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Serve dashboard HTML (optional - for standalone deployment)
-@app.get("/dashboard", response_class=HTMLResponse)
-async def get_dashboard():
+@router.get("/incident/{incident_id}")
+async def get_incident_details(incident_id: str):
     """
-    Serve the dashboard UI
+    Get detailed information about a specific incident
     """
-    return """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>AI DevOps Autopilot Dashboard</title>
-        <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-        <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-        <script src="https://cdn.tailwindcss.com"></script>
-    </head>
-    <body>
-        <div id="root"></div>
-        <script>
-            // Dashboard will be loaded here
-            // For production, serve the compiled React app
-            document.getElementById('root').innerHTML = `
-                <div class="min-h-screen bg-gray-50 flex items-center justify-center">
-                    <div class="text-center">
-                        <h1 class="text-4xl font-bold text-gray-900 mb-4">AI DevOps Autopilot</h1>
-                        <p class="text-gray-600 mb-8">Dashboard is loading...</p>
-                        <p class="text-sm text-gray-500">Use the React artifact or build separately</p>
-                        <a href="/api/stats" class="text-blue-600 hover:underline">Test API</a>
-                    </div>
-                </div>
-            `;
-        </script>
-    </body>
-    </html>
-    """
+    try:
+        # Parse service from incident_id
+        service_name = incident_id.split('_')[0]
+        
+        incident_key = f"incidents:{service_name}"
+        incidents = redis_client.lrange(incident_key, 0, -1)
+        
+        for incident_json in incidents:
+            incident = json.loads(incident_json)
+            if incident.get('id', f"{service_name}_{incident['timestamp']}") == incident_id:
+                return incident
+        
+        raise HTTPException(status_code=404, detail="Incident not found")
+    
+    except Exception as e:
+        print(f"[API ERROR] Failed to get incident details: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+@router.post("/incident/{incident_id}/resolve")
+async def resolve_incident(incident_id: str):
+    """
+    Mark an incident as resolved
+    """
+    try:
+        # Parse service from incident_id
+        service_name = incident_id.split('_')[0]
+        
+        incident_key = f"incidents:{service_name}"
+        incidents = redis_client.lrange(incident_key, 0, -1)
+        
+        updated = False
+        for i, incident_json in enumerate(incidents):
+            incident = json.loads(incident_json)
+            if incident.get('id', f"{service_name}_{incident['timestamp']}") == incident_id:
+                incident['status'] = 'resolved'
+                incident['resolved_at'] = datetime.utcnow().isoformat()
+                
+                # Update in Redis
+                redis_client.lset(incident_key, i, json.dumps(incident))
+                updated = True
+                break
+        
+        if not updated:
+            raise HTTPException(status_code=404, detail="Incident not found")
+        
+        return {"status": "success", "message": "Incident marked as resolved"}
+    
+    except Exception as e:
+        print(f"[API ERROR] Failed to resolve incident: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/metrics/timeseries")
+async def get_metrics_timeseries(
+    service: str,
+    metric: str,
+    hours: int = 24
+):
+    """
+    Get time-series data for a specific metric
+    """
+    try:
+        # Get baseline history
+        key = f"baseline:{service}:{metric}"
+        baseline_data = redis_client.get(key)
+        
+        if not baseline_data:
+            return {"data": [], "service": service, "metric": metric}
+        
+        baseline = json.loads(baseline_data)
+        values = baseline.get('values', [])
+        
+        # Create time series (mock timestamps for now)
+        timeseries = []
+        now = datetime.utcnow()
+        
+        for i, value in enumerate(values[-100:]):  # Last 100 values
+            timestamp = (now - timedelta(minutes=100-i)).isoformat()
+            timeseries.append({
+                'timestamp': timestamp,
+                'value': value
+            })
+        
+        return {
+            "data": timeseries,
+            "service": service,
+            "metric": metric,
+            "mean": baseline.get('mean', 0),
+            "std_dev": baseline.get('std_dev', 0)
+        }
+    
+    except Exception as e:
+        print(f"[API ERROR] Failed to get timeseries: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

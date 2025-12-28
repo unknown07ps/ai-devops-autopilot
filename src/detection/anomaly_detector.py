@@ -1,7 +1,7 @@
 import redis
 import json
 import statistics
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
 from collections import defaultdict
 import os
@@ -51,7 +51,7 @@ class AnomalyDetector:
             "std_dev": std_dev,
             "count": len(values),
             "values": values,
-            "last_updated": datetime.utcnow().isoformat()
+            "last_updated": datetime.now(timezone.utc).isoformat()
         })
         
         # Store with 7 day expiry
@@ -96,7 +96,7 @@ class AnomalyDetector:
                 "z_score": z_score,
                 "deviation_percent": deviation_pct,
                 "severity": self._calculate_severity(z_score),
-                "detected_at": datetime.utcnow().isoformat()
+                "detected_at": datetime.now(timezone.utc).isoformat()
             }
         
         return None
@@ -140,7 +140,7 @@ class AnomalyDetector:
                 "error_count": error_count,
                 "total_count": total_count,
                 "severity": "high" if current_error_rate > 5 else "medium",
-                "detected_at": datetime.utcnow().isoformat()
+                "detected_at": datetime.now(timezone.utc).isoformat()
             }
         
         self.update_baseline("error_rate", service, current_error_rate)
@@ -154,70 +154,71 @@ class AnomalyDetector:
         start_time = (anomaly_time - timedelta(minutes=30)).timestamp()
         
         # Get recent deployments from sorted set
-        recent_deploys = self.redis.zrangebyscore(
-            f"deployments:{service}",
-            start_time,
-            anomaly_time.timestamp()
-        )
-        
-        if recent_deploys:
-            # Get the most recent deployment
-            latest_version = recent_deploys[-1].decode('utf-8')
-            deploy_time = self.redis.zscore(f"deployments:{service}", latest_version)
+        try:
+            recent_deploys = self.redis.zrangebyscore(
+                f"deployments:{service}",
+                start_time,
+                anomaly_time.timestamp()
+            )
             
-            time_since_deploy = (anomaly_time.timestamp() - deploy_time) / 60  # minutes
-            
-            return {
-                "correlated": True,
-                "version": latest_version,
-                "time_since_deploy_minutes": time_since_deploy,
-                "confidence": "high" if time_since_deploy < 10 else "medium"
-            }
+            if recent_deploys:
+                # Get the most recent deployment
+                latest_version = recent_deploys[-1].decode('utf-8')
+                deploy_time = self.redis.zscore(f"deployments:{service}", latest_version)
+                
+                time_since_deploy = (anomaly_time.timestamp() - deploy_time) / 60  # minutes
+                
+                return {
+                    "correlated": True,
+                    "version": latest_version,
+                    "time_since_deploy_minutes": time_since_deploy,
+                    "confidence": "high" if time_since_deploy < 10 else "medium"
+                }
+        except Exception as e:
+            print(f"[DEBUG] Deployment correlation failed: {e}")
         
         return None
     
     def get_recent_anomalies(self, service: str, minutes: int = 30) -> List[Dict]:
         """
         Get all anomalies detected in the last N minutes
+        Simple list-based approach for Redis compatibility
         """
-        # Retrieve from Redis stream
-        start_time = int((datetime.utcnow() - timedelta(minutes=minutes)).timestamp() * 1000)
-        
         anomalies = []
-        stream_data = self.redis.xrange(
-            f"anomalies:{service}",
-            min=start_time,
-            max="+"
-        )
         
-        for msg_id, data in stream_data:
-            anomalies.append(json.loads(data[b'data']))
+        try:
+            # Get from simple list (already stored this way)
+            key = f"recent_anomalies:{service}"
+            anomaly_data = self.redis.lrange(key, 0, 99)  # Get last 100
+            
+            cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+            
+            for anomaly_json in anomaly_data:
+                try:
+                    anomaly = json.loads(anomaly_json)
+                    detected_at = datetime.fromisoformat(anomaly['detected_at'].replace('Z', '+00:00'))
+                    
+                    # Only include recent anomalies
+                    if detected_at.replace(tzinfo=None) > cutoff_time.replace(tzinfo=None):
+                        anomalies.append(anomaly)
+                except Exception as e:
+                    print(f"[DEBUG] Failed to parse anomaly: {e}")
+                    continue
+        except Exception as e:
+            print(f"[DEBUG] Failed to get recent anomalies: {e}")
         
         return anomalies
     
     def store_anomaly(self, service: str, anomaly: Dict):
         """
         Store detected anomaly for correlation and analysis
+        Simple list-based storage for Redis compatibility
         """
         try:
-            event = {
-                "type": "anomaly",
-                "data": json.dumps(anomaly)
-            }
-            # Try streams first
-            try:
-                self.redis.xadd(f"anomalies:{service}", event)
-            except redis.exceptions.ResponseError as e:
-                if 'unknown command' in str(e).lower():
-                    # Fallback to simple list
-                    pass
-                else:
-                    raise
-        except:
-            pass
-        
-        # Also store in a list for quick access (with expiry)
-        key = f"recent_anomalies:{service}"
-        self.redis.lpush(key, json.dumps(anomaly))
-        self.redis.ltrim(key, 0, 99)  # Keep last 100
-        self.redis.expire(key, 24 * 60 * 60)  # 24 hour expiry
+            # Store in a list for quick access (with expiry)
+            key = f"recent_anomalies:{service}"
+            self.redis.lpush(key, json.dumps(anomaly))
+            self.redis.ltrim(key, 0, 99)  # Keep last 100
+            self.redis.expire(key, 24 * 60 * 60)  # 24 hour expiry
+        except Exception as e:
+            print(f"[DEBUG] Failed to store anomaly: {e}")
