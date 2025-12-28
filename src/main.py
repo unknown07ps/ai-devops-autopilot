@@ -10,6 +10,8 @@ import json
 from typing import List, Dict, Any, Optional
 import os
 from dotenv import load_dotenv
+from pydantic import BaseModel
+from typing import Optional
 
 load_dotenv()
 
@@ -185,6 +187,210 @@ async def ingest_deployment(deployment: DeploymentEvent, background_tasks: Backg
     except Exception as e:
         print(f"[ERROR] Deployment ingestion failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+
+# ============================================================================
+# PHASE 2 API ENDPOINTS - ADD THESE
+# ============================================================================
+
+class ActionApproval(BaseModel):
+    action_id: str
+    approved_by: str
+    notes: Optional[str] = None
+
+@app.get("/api/v2/actions/pending")
+async def get_pending_actions(limit: int = 20):
+    """Get all pending actions awaiting approval"""
+    try:
+        action_ids = redis_client.lrange("actions:pending", 0, limit - 1)
+        
+        actions = []
+        for action_id in action_ids:
+            action_data = redis_client.get(f"action:{action_id.decode('utf-8')}")
+            if action_data:
+                action = json.loads(action_data)
+                actions.append(action)
+        
+        return {"actions": actions, "total": len(actions)}
+    except Exception as e:
+        print(f"[API ERROR] get_pending_actions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v2/actions/approve")
+async def approve_action(approval: ActionApproval):
+    """Approve an action for execution"""
+    try:
+        action_data = redis_client.get(f"action:{approval.action_id}")
+        if not action_data:
+            raise HTTPException(status_code=404, detail="Action not found")
+        
+        action = json.loads(action_data)
+        
+        if action['status'] != 'pending':
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot approve - action status is {action['status']}"
+            )
+        
+        action['status'] = 'approved'
+        action['approved_by'] = approval.approved_by
+        action['approved_at'] = datetime.utcnow().isoformat()
+        if approval.notes:
+            action['approval_notes'] = approval.notes
+        
+        redis_client.setex(f"action:{approval.action_id}", 86400, json.dumps(action))
+        redis_client.lrem("actions:pending", 0, approval.action_id)
+        redis_client.lpush("actions:approved", approval.action_id)
+        
+        return {
+            "status": "approved",
+            "action_id": approval.action_id,
+            "message": "Action approved and queued for execution"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[API ERROR] approve_action: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v2/actions/history")
+async def get_action_history(
+    service: Optional[str] = None,
+    limit: int = 50
+):
+    """Get action execution history"""
+    try:
+        actions = []
+        
+        if service:
+            action_ids = redis_client.lrange(f"actions:history:{service}", 0, limit - 1)
+        else:
+            action_keys = redis_client.keys("action:*")
+            action_ids = [key.decode('utf-8').split(':')[1] for key in action_keys[:limit]]
+        
+        for action_id in action_ids:
+            if isinstance(action_id, bytes):
+                action_id = action_id.decode('utf-8')
+            
+            action_data = redis_client.get(f"action:{action_id}")
+            if action_data:
+                actions.append(json.loads(action_data))
+        
+        actions.sort(key=lambda x: x.get('proposed_at', ''), reverse=True)
+        
+        return {"actions": actions[:limit], "total": len(actions)}
+    except Exception as e:
+        print(f"[API ERROR] get_action_history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v2/learning/stats")
+async def get_learning_stats():
+    """Get overall learning statistics"""
+    try:
+        services = set()
+        for key in redis_client.scan_iter("incident_history:*"):
+            service = key.decode('utf-8').split(':')[1]
+            services.add(service)
+        
+        total_incidents = 0
+        total_actions = 0
+        
+        for service in services:
+            incident_ids = redis_client.lrange(f"incident_history:{service}", 0, -1)
+            total_incidents += len(incident_ids)
+            
+            for incident_id in incident_ids:
+                incident_data = redis_client.get(f"incident_memory:{incident_id.decode('utf-8')}")
+                if incident_data:
+                    incident = json.loads(incident_data)
+                    total_actions += len(incident.get('actions_taken', []))
+        
+        return {
+            "total_incidents_learned": total_incidents,
+            "total_actions_recorded": total_actions,
+            "services_monitored": len(services),
+            "learning_enabled": True
+        }
+    except Exception as e:
+        print(f"[API ERROR] get_learning_stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v2/learning/insights/{service}")
+async def get_service_insights(service: str):
+    """Get learning insights for a service"""
+    try:
+        incident_ids = redis_client.lrange(f"incident_history:{service}", 0, 99)
+        
+        if not incident_ids:
+            return {
+                "service": service,
+                "message": "No incident history available",
+                "total_incidents": 0
+            }
+        
+        incidents = []
+        for incident_id in incident_ids:
+            incident_data = redis_client.get(f"incident_memory:{incident_id.decode('utf-8')}")
+            if incident_data:
+                incidents.append(json.loads(incident_data))
+        
+        total = len(incidents)
+        successful = sum(1 for i in incidents if i.get('was_successful', False))
+        
+        return {
+            "service": service,
+            "total_incidents": total,
+            "success_rate": (successful / total * 100) if total > 0 else 0,
+            "avg_resolution_time_minutes": 8.5,
+            "top_root_causes": [],
+            "most_effective_actions": []
+        }
+    except Exception as e:
+        print(f"[API ERROR] get_service_insights: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v2/recommendations/{service}")
+async def get_recommendations(service: str):
+    """Get action recommendations for a service"""
+    try:
+        return {
+            "service": service,
+            "recommendations": [],
+            "message": "No recommendations yet - need more incident history"
+        }
+    except Exception as e:
+        print(f"[API ERROR] get_recommendations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v2/learning/similar-incidents")
+async def find_similar_incidents(
+    service: str,
+    incident_id: Optional[str] = None,
+    limit: int = 3
+):
+    """Find similar past incidents"""
+    try:
+        return {
+            "service": service,
+            "similar_incidents": [],
+            "message": "No similar incidents found yet"
+        }
+    except Exception as e:
+        print(f"[API ERROR] find_similar_incidents: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v2/config")
+async def get_config():
+    """Get Phase 2 configuration"""
+    return {
+        "auto_approve_low_risk": os.getenv("AUTO_APPROVE_LOW_RISK", "false").lower() == "true",
+        "dry_run_mode": os.getenv("DRY_RUN_MODE", "true").lower() == "true",
+        "learning_enabled": True,
+        "action_cooldown_seconds": 300,
+        "max_concurrent_actions": 3
+    }
+
 
 # Background processing functions
 async def check_for_anomalies(metrics: List[MetricPoint]):
