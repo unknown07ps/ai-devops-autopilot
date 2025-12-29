@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI DevOps Autopilot - Unified Control Center</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        .slide-in { animation: slideIn 0.3s ease-out; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen text-gray-100">
+    <div id="app"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let currentView = 'control-center';
+        let autoRefresh = false;
+        let refreshInterval = null;
+        
+        let state = {
+            // Phase 1: Detection
+            stats: null,
+            incidents: [],
+            anomalies: [],
+            services: [],
+            
+            // Phase 2: Supervised Actions
+            pendingActions: [],
+            actionHistory: [],
+            learningStats: {},
+            
+            // Phase 3: Autonomous
+            autonomousStatus: null,
+            safetyStatus: null,
+            outcomes: [],
+            
+            loading: true,
+            selectedIncident: null,
+            selectedAction: null
+        };
+
+        async function fetchAllData() {
+            try {
+                const [
+                    statsRes, incidentsRes, anomaliesRes, servicesRes,
+                    pendingRes, historyRes, learningRes,
+                    autoStatusRes, safetyRes, outcomesRes
+                ] = await Promise.all([
+                    // Phase 1
+                    fetch(`${API_BASE}/api/stats`).catch(() => null),
+                    fetch(`${API_BASE}/api/incidents?limit=20`).catch(() => null),
+                    fetch(`${API_BASE}/api/anomalies?limit=50`).catch(() => null),
+                    fetch(`${API_BASE}/api/services`).catch(() => null),
+                    
+                    // Phase 2
+                    fetch(`${API_BASE}/api/v2/actions/pending`).catch(() => null),
+                    fetch(`${API_BASE}/api/v2/actions/history?limit=30`).catch(() => null),
+                    fetch(`${API_BASE}/api/v2/learning/stats`).catch(() => null),
+                    
+                    // Phase 3
+                    fetch(`${API_BASE}/api/v3/autonomous/status`).catch(() => null),
+                    fetch(`${API_BASE}/api/v3/autonomous/safety-status`).catch(() => null),
+                    fetch(`${API_BASE}/api/v3/autonomous/outcomes?limit=30`).catch(() => null)
+                ]);
+
+                if (statsRes?.ok) state.stats = await statsRes.json();
+                if (incidentsRes?.ok) state.incidents = (await incidentsRes.json()).incidents || [];
+                if (anomaliesRes?.ok) state.anomalies = (await anomaliesRes.json()).anomalies || [];
+                if (servicesRes?.ok) state.services = (await servicesRes.json()).services || [];
+                
+                if (pendingRes?.ok) state.pendingActions = (await pendingRes.json()).actions || [];
+                if (historyRes?.ok) state.actionHistory = (await historyRes.json()).actions || [];
+                if (learningRes?.ok) state.learningStats = await learningRes.json();
+                
+                if (autoStatusRes?.ok) state.autonomousStatus = await autoStatusRes.json();
+                if (safetyRes?.ok) state.safetyStatus = await safetyRes.json();
+                if (outcomesRes?.ok) {
+                    const data = await outcomesRes.json();
+                    state.outcomes = data.outcomes || [];
+                }
+                
+                state.loading = false;
+                render();
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                state.loading = false;
+                renderError(error.message);
+            }
+        }
+
+        function toggleAutoRefresh() {
+            autoRefresh = !autoRefresh;
+            if (autoRefresh) {
+                refreshInterval = setInterval(fetchAllData, 10000);
+            } else {
+                clearInterval(refreshInterval);
+            }
+            render();
+        }
+
+        function switchView(view) {
+            currentView = view;
+            state.selectedIncident = null;
+            state.selectedAction = null;
+            render();
+        }
+
+        function renderError(message) {
+            document.getElementById('app').innerHTML = `
+                <div class="min-h-screen flex items-center justify-center p-6">
+                    <div class="bg-slate-800 rounded-xl shadow-2xl p-8 max-w-2xl w-full border border-slate-700">
+                        <div class="text-center">
+                            <div class="text-6xl mb-4">⚠️</div>
+                            <h2 class="text-2xl font-bold mb-4">Connection Error</h2>
+                            <div class="bg-red-900/20 border border-red-600/50 rounded-lg p-4 mb-6">
+                                <p class="text-sm text-red-300">${message}</p>
+                            </div>
+                            <div class="bg-blue-900/20 border border-blue-600/50 rounded-lg p-6 mb-6 text-left">
+                                <p class="font-semibold mb-3">Quick Start:</p>
+                                <ol class="space-y-2 text-sm">
+                                    <li>1. <code class="bg-slate-700 px-2 py-1 rounded">uvicorn src.main:app --reload</code></li>
+                                    <li>2. <code class="bg-slate-700 px-2 py-1 rounded">python src/worker_phase3.py</code></li>
+                                    <li>3. <code class="bg-slate-700 px-2 py-1 rounded">python test_phase2.py</code></li>
+                                    <li>4. Refresh this page</li>
+                                </ol>
+                            </div>
+                            <button onclick="fetchAllData()" class="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg font-semibold transition">
+                                Retry Connection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function render() {
+            if (state.loading) {
+                document.getElementById('app').innerHTML = `
+                    <div class="min-h-screen flex items-center justify-center">
+                        <div class="text-center">
+                            <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                            <p class="text-gray-300">Loading Unified Dashboard...</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            const app = document.getElementById('app');
+            app.innerHTML = `
+                ${renderHeader()}
+                ${renderMainContent()}
+                ${renderNotifications()}
+            `;
+        }
+
+        function renderHeader() {
+            const pendingCount = state.pendingActions?.length || 0;
+            const criticalIncidents = state.incidents?.filter(i => i.severity === 'critical').length || 0;
+            const autoMode = state.autonomousStatus?.execution_mode || 'manual';
+            
+            return `
+                <div class="bg-slate-800/50 border-b border-slate-700 backdrop-blur-sm sticky top-0 z-50">
+                    <div class="max-w-7xl mx-auto px-6 py-4">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-4">
+                                <div class="bg-gradient-to-br from-blue-500 to-purple-600 p-3 rounded-xl">
+                                    <span class="text-2xl">⚡</span>
+                                </div>
+                                <div>
+                                    <h1 class="text-2xl font-bold">AI DevOps Autopilot</h1>
+                                    <p class="text-sm text-gray-400">Unified Control Center</p>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center gap-3">
+                                ${renderModeIndicator(autoMode)}
+                                <button onclick="toggleAutoRefresh()" class="${autoRefresh ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-700 hover:bg-slate-600'} px-4 py-2 rounded-lg font-medium transition text-sm">
+                                    ${autoRefresh ? '🔄 Live' : '⏸️ Paused'}
+                                </button>
+                                <button onclick="fetchAllData()" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-medium transition text-sm">
+                                    Refresh
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Quick Stats Bar -->
+                        <div class="grid grid-cols-4 gap-3 mb-4">
+                            ${renderQuickStat('🚨', 'Critical', criticalIncidents, criticalIncidents > 0 ? 'text-red-400' : 'text-gray-400')}
+                            ${renderQuickStat('⚡', 'Pending', pendingCount, pendingCount > 0 ? 'text-orange-400' : 'text-gray-400')}
+                            ${renderQuickStat('🎯', 'Success', state.outcomes.filter(o => o.success).length, 'text-green-400')}
+                            ${renderQuickStat('💚', 'Healthy', state.stats?.healthy_services || 0, 'text-green-400')}
+                        </div>
+
+                        <!-- Navigation -->
+                        <div class="flex gap-2 overflow-x-auto pb-2">
+                            ${renderNavButton('control-center', '🎛️ Control Center')}
+                            ${renderNavButton('incidents', '🚨 Incidents', criticalIncidents)}
+                            ${renderNavButton('actions', '⚡ Actions', pendingCount)}
+                            ${renderNavButton('autonomous', '🤖 Autonomous')}
+                            ${renderNavButton('services', '🖥️ Services')}
+                            ${renderNavButton('analytics', '📊 Analytics')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderModeIndicator(mode) {
+            const colors = {
+                manual: 'bg-gray-700 text-gray-300',
+                supervised: 'bg-blue-700 text-blue-200',
+                autonomous: 'bg-green-700 text-green-200',
+                night_mode: 'bg-purple-700 text-purple-200'
+            };
+            
+            const icons = {
+                manual: '👤',
+                supervised: '👁️',
+                autonomous: '🤖',
+                night_mode: '🌙'
+            };
+            
+            return `
+                <div class="${colors[mode] || colors.manual} px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2">
+                    <span>${icons[mode] || icons.manual}</span>
+                    <span class="uppercase tracking-wide">${mode.replace('_', ' ')}</span>
+                </div>
+            `;
+        }
+
+        function renderQuickStat(icon, label, value, colorClass) {
+            return `
+                <div class="bg-slate-700/50 rounded-lg px-4 py-2 flex items-center gap-3">
+                    <span class="text-2xl">${icon}</span>
+                    <div>
+                        <div class="text-xs text-gray-400">${label}</div>
+                        <div class="text-xl font-bold ${colorClass}">${value}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderNavButton(view, label, badge = 0) {
+            const isActive = currentView === view;
+            return `
+                <button onclick="switchView('${view}')" class="${isActive ? 'bg-slate-700 text-blue-400 border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-200 hover:bg-slate-700/50'} px-6 py-3 rounded-t-lg font-medium transition relative whitespace-nowrap text-sm">
+                    ${label}
+                    ${badge > 0 ? `<span class="absolute -top-1 -right-1 bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full">${badge}</span>` : ''}
+                </button>
+            `;
+        }
+
+        function renderMainContent() {
+            const views = {
+                'control-center': renderControlCenter,
+                'incidents': renderIncidentsView,
+                'actions': renderActionsView,
+                'autonomous': renderAutonomousView,
+                'services': renderServicesView,
+                'analytics': renderAnalyticsView
+            };
+            
+            const renderFunc = views[currentView] || renderControlCenter;
+            
+            return `
+                <div class="max-w-7xl mx-auto px-6 py-6">
+                    ${renderFunc()}
+                </div>
+            `;
+        }
+
+        function renderControlCenter() {
+            const critical = state.incidents.filter(i => i.severity === 'critical').length;
+            const pending = state.pendingActions.length;
+            const autoSuccess = state.outcomes.filter(o => o.success).length;
+            const autoTotal = state.outcomes.length;
+            const successRate = autoTotal > 0 ? ((autoSuccess / autoTotal) * 100).toFixed(1) : 0;
+            
+            return `
+                <div class="space-y-6">
+                    <!-- System Health Overview -->
+                    <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 border border-slate-700 shadow-xl">
+                        <h2 class="text-2xl font-bold mb-6 flex items-center gap-3">
+                            <span class="bg-blue-600 p-2 rounded-lg">🎛️</span>
+                            System Health Overview
+                        </h2>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <!-- Phase 1: Detection -->
+                            <div class="bg-slate-700/50 rounded-lg p-6 border-l-4 border-blue-500">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="font-bold text-lg">Phase 1: Detection</h3>
+                                    <span class="bg-blue-900/50 text-blue-300 px-3 py-1 rounded-full text-xs font-bold">ACTIVE</span>
+                                </div>
+                                <div class="space-y-3">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm text-gray-400">Critical Incidents</span>
+                                        <span class="text-2xl font-bold ${critical > 0 ? 'text-red-400' : 'text-green-400'}">${critical}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm text-gray-400">Anomalies (24h)</span>
+                                        <span class="text-2xl font-bold text-orange-400">${state.anomalies.length}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm text-gray-400">Services Monitored</span>
+                                        <span class="text-2xl font-bold text-blue-400">${state.services.length}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Phase 2: Supervised Actions -->
+                            <div class="bg-slate-700/50 rounded-lg p-6 border-l-4 border-purple-500">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="font-bold text-lg">Phase 2: Supervised</h3>
+                                    <span class="bg-purple-900/50 text-purple-300 px-3 py-1 rounded-full text-xs font-bold">ACTIVE</span>
+                                </div>
+                                <div class="space-y-3">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm text-gray-400">Pending Approval</span>
+                                        <span class="text-2xl font-bold ${pending > 0 ? 'text-orange-400' : 'text-gray-400'}">${pending}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm text-gray-400">Actions Learned</span>
+                                        <span class="text-2xl font-bold text-purple-400">${state.learningStats.total_actions_recorded || 0}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm text-gray-400">Incidents Learned</span>
+                                        <span class="text-2xl font-bold text-blue-400">${state.learningStats.total_incidents_learned || 0}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Phase 3: Autonomous -->
+                            <div class="bg-slate-700/50 rounded-lg p-6 border-l-4 border-green-500">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="font-bold text-lg">Phase 3: Autonomous</h3>
+                                    <span class="bg-green-900/50 text-green-300 px-3 py-1 rounded-full text-xs font-bold">
+                                        ${state.autonomousStatus?.autonomous_enabled ? 'ENABLED' : 'DISABLED'}
+                                    </span>
+                                </div>
+                                <div class="space-y-3">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm text-gray-400">Auto Success Rate</span>
+                                        <span class="text-2xl font-bold ${successRate > 80 ? 'text-green-400' : successRate > 60 ? 'text-yellow-400' : 'text-red-400'}">${successRate}%</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm text-gray-400">Auto Executed</span>
+                                        <span class="text-2xl font-bold text-green-400">${autoSuccess}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm text-gray-400">Confidence Threshold</span>
+                                        <span class="text-2xl font-bold text-blue-400">${state.autonomousStatus?.confidence_threshold || 75}%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Actions -->
+                    ${pending > 0 ? renderQuickActionPanel() : ''}
+
+                    <!-- Recent Activity -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        ${renderRecentIncidents()}
+                        ${renderRecentActions()}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderQuickActionPanel() {
+            const urgentActions = state.pendingActions.slice(0, 3);
+            
+            return `
+                <div class="bg-orange-900/20 border-2 border-orange-600/50 rounded-xl p-6 slide-in">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-bold flex items-center gap-2">
+                            <span class="animate-pulse">⚡</span>
+                            Urgent: Actions Awaiting Approval
+                        </h3>
+                        <button onclick="switchView('actions')" class="text-sm text-orange-400 hover:text-orange-300 font-semibold">
+                            View All →
+                        </button>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        ${urgentActions.map(action => `
+                            <div class="bg-slate-800 rounded-lg p-4 border-l-4 ${action.risk === 'low' ? 'border-green-500' : action.risk === 'high' ? 'border-red-500' : 'border-orange-500'}">
+                                <div class="flex items-start justify-between mb-2">
+                                    <div class="flex-1">
+                                        <div class="font-bold text-lg">${action.action_type.replace(/_/g, ' ').toUpperCase()}</div>
+                                        <div class="text-sm text-gray-400">${action.service} • ${action.risk} risk</div>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button onclick="approveAction('${action.id}')" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm font-bold transition">
+                                            ✓
+                                        </button>
+                                        <button onclick="rejectAction('${action.id}')" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded text-sm font-bold transition">
+                                            ✗
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="text-sm text-gray-300">${action.reasoning}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderRecentIncidents() {
+            const recent = state.incidents.slice(0, 5);
+            
+            return `
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-bold">Recent Incidents</h3>
+                        <button onclick="switchView('incidents')" class="text-sm text-blue-400 hover:text-blue-300">
+                            View All →
+                        </button>
+                    </div>
+                    
+                    ${recent.length > 0 ? `
+                        <div class="space-y-2">
+                            ${recent.map(inc => `
+                                <div class="bg-slate-700/50 rounded-lg p-3 hover:bg-slate-700 transition cursor-pointer" onclick="viewIncident('${inc.id}')">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="font-semibold">${inc.service}</span>
+                                        <span class="px-2 py-1 rounded text-xs font-bold ${getSeverityClass(inc.severity)}">
+                                            ${inc.severity}
+                                        </span>
+                                    </div>
+                                    <div class="text-sm text-gray-400 truncate">${inc.root_cause}</div>
+                                    <div class="text-xs text-gray-500 mt-1">${formatTime(inc.timestamp)}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : '<div class="text-center py-8 text-gray-500">No recent incidents</div>'}
+                </div>
+            `;
+        }
+
+        function renderRecentActions() {
+            const recent = state.actionHistory.slice(0, 5);
+            
+            return `
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-bold">Recent Actions</h3>
+                        <button onclick="switchView('actions')" class="text-sm text-blue-400 hover:text-blue-300">
+                            View All →
+                        </button>
+                    </div>
+                    
+                    ${recent.length > 0 ? `
+                        <div class="space-y-2">
+                            ${recent.map(action => `
+                                <div class="bg-slate-700/50 rounded-lg p-3 hover:bg-slate-700 transition">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="font-semibold">${action.action_type}</span>
+                                        <span class="px-2 py-1 rounded text-xs font-bold ${getStatusClass(action.status)}">
+                                            ${action.status}
+                                        </span>
+                                    </div>
+                                    <div class="text-sm text-gray-400">${action.service}</div>
+                                    <div class="text-xs text-gray-500 mt-1">${formatTime(action.proposed_at)}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : '<div class="text-center py-8 text-gray-500">No recent actions</div>'}
+                </div>
+            `;
+        }
+
+        function renderIncidentsView() {
+            return `
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-2xl font-bold">Incident Management</h2>
+                        <div class="flex gap-2">
+                            <button class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-sm">
+                                Filter
+                            </button>
+                            <button class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-sm">
+                                Export
+                            </button>
+                        </div>
+                    </div>
+
+                    ${state.incidents.length > 0 ? `
+                        <div class="space-y-3">
+                            ${state.incidents.map(inc => `
+                                <div class="bg-slate-800 rounded-xl p-6 border-l-4 ${inc.severity === 'critical' ? 'border-red-500' : inc.severity === 'high' ? 'border-orange-500' : 'border-yellow-500'} hover:shadow-xl transition cursor-pointer" onclick="viewIncident('${inc.id}')">
+                                    <div class="flex items-start justify-between mb-4">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-3 mb-2">
+                                                <span class="text-2xl">${inc.severity === 'critical' ? '🔴' : '🟠'}</span>
+                                                <div>
+                                                    <h3 class="font-bold text-lg">${inc.service}</h3>
+                                                    <div class="text-sm text-gray-400">${formatTime(inc.timestamp)}</div>
+                                                </div>
+                                            </div>
+                                            <p class="text-gray-300 mb-3">${inc.root_cause}</p>
+                                            <div class="flex gap-4 text-sm">
+                                                <span class="text-gray-400">${inc.anomaly_count} anomalies</span>
+                                                <span class="text-gray-400">${inc.confidence}% confidence</span>
+                                                <span class="text-gray-400">${inc.customer_impact}</span>
+                                            </div>
+                                        </div>
+                                        <span class="px-3 py-1 rounded-full text-xs font-bold ${getSeverityClass(inc.severity)}">
+                                            ${inc.severity}
+                                        </span>
+                                    </div>
+                                    ${inc.recommended_actions?.length > 0 ? `
+                                        <div class="bg-slate-700/50 rounded-lg p-3 mt-3">
+                                            <div class="text-xs font-bold text-gray-400 mb-2">Recommended Actions:</div>
+                                            <div class="space-y-1">
+                                                ${inc.recommended_actions.slice(0, 2).map(action => `
+                                                    <div class="text-sm text-gray-300">• ${action.action} (${action.risk} risk)</div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : `
+                        <div class="bg-slate-800 rounded-xl p-12 text-center border border-slate-700">
+                            <div class="text-6xl mb-4">✅</div>
+                            <p class="text-xl font-semibold mb-2">No Active Incidents</p>
+                            <p class="text-gray-400">All systems operating normally</p>
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+
+        function renderActionsView() {
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold">Action Management</h2>
+
+                    ${state.pendingActions.length > 0 ? `
+                        <div class="bg-orange-900/20 border-2 border-orange-600/50 rounded-xl p-6">
+                            <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                                <span class="animate-pulse">⚡</span>
+                                Pending Approval (${state.pendingActions.length})
+                            </h3>
+                            <div class="space-y-4">
+                                ${state.pendingActions.map(action => `
+                                    <div class="bg-slate-800 rounded-lg p-5 border-l-4 ${action.risk === 'low' ? 'border-green-500' : action.risk === 'high' ? 'border-red-500' : 'border-orange-500'}">
+                                        <div class="flex items-start justify-between mb-3">
+                                            <div class="flex-1">
+                                                <div class="flex items-center gap-3 mb-2">
+                                                    <h4 class="text-lg font-bold">${action.action_type.replace(/_/g, ' ').toUpperCase()}</h4>
+                                                    <span class="px-2 py-1 rounded-full text-xs font-bold ${getRiskClass(action.risk)}">
+                                                        ${action.risk} RISK
+                                                    </span>
+                                                </div>
+                                                <div class="text-sm text-gray-400 mb-2">🖥️ ${action.service} • ⏰ ${formatTime(action.proposed_at)}</div>
+                                                <div class="bg-slate-700/50 rounded p-3 mb-3">
+                                                    <div class="text-sm font-semibold mb-1">Reasoning:</div>
+                                                    <div class="text-sm text-gray-300">${action.reasoning}</div>
+                                                </div>
+                                                ${action.params ? `
+                                                    <div class="text-xs text-gray-500">
+                                                        <code>${JSON.stringify(action.params)}</code>
+                                                    </div>
+                                                ` : ''}
+                                            </div>
+                                            <div class="flex gap-2 ml-4">
+                                                <button onclick="approveAction('${action.id}')" class="bg-green-600 hover:bg-green-700 px-6 py-3 rounded-lg font-bold transition">
+                                                    ✓ Approve
+                                                </button>
+                                                <button onclick="rejectAction('${action.id}')" class="bg-red-600 hover:bg-red-700 px-6 py-3 rounded-lg font-bold transition">
+                                                    ✗ Reject
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-xl font-bold mb-4">Action History</h3>
+                        ${state.actionHistory.length > 0 ? `
+                            <div class="overflow-x-auto">
+                                <table class="w-full">
+                                    <thead class="bg-slate-700/50 border-b border-slate-600">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-xs font-bold">Action</th>
+                                            <th class="px-4 py-3 text-left text-xs font-bold">Service</th>
+                                            <th class="px-4 py-3 text-left text-xs font-bold">Status</th>
+                                            <th class="px-4 py-3 text-left text-xs font-bold">Risk</th>
+                                            <th class="px-4 py-3 text-left text-xs font-bold">Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-700">
+                                        ${state.actionHistory.map(action => `
+                                            <tr class="hover:bg-slate-700/30 transition">
+                                                <td class="px-4 py-3 font-semibold">${action.action_type}</td>
+                                                <td class="px-4 py-3 text-sm">${action.service}</td>
+                                                <td class="px-4 py-3">
+                                                    <span class="px-2 py-1 rounded text-xs font-bold ${getStatusClass(action.status)}">
+                                                        ${action.status}
+                                                    </span>
+                                                </td>
+                                                <td class="px-4 py-3">
+                                                    <span class="px-2 py-1 rounded text-xs font-bold ${getRiskClass(action.risk)}">
+                                                        ${action.risk}
+                                                    </span>
+                                                </td>
+                                                <td class="px-4 py-3 text-sm text-gray-400">${formatTime(action.proposed_at)}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ` : '<div class="text-center py-8 text-gray-500">No action history</div>'}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAutonomousView() {
+            const status = state.autonomousStatus || {};
+            const safety = state.safetyStatus || {};
+            const stats = state.outcomes?.statistics || {};
+            
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold">Autonomous Execution Control</h2>
+
+                    <!-- Mode Control -->
+                    <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-xl font-bold mb-4">Execution Mode</h3>
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            ${['manual', 'supervised', 'autonomous', 'night_mode'].map(mode => `
+                                <button onclick="setAutonomousMode('${mode}')" class="p-6 rounded-lg border-2 transition ${status.execution_mode === mode ? 'border-blue-500 bg-blue-900/30' : 'border-slate-700 hover:border-slate-600'} text-left">
+                                    <div class="text-3xl mb-2">${{manual: '👤', supervised: '👁️', autonomous: '🤖', night_mode: '🌙'}[mode]}</div>
+                                    <div class="font-bold mb-1">${mode.replace('_', ' ').toUpperCase()}</div>
+                                    <div class="text-xs text-gray-400">
+                                        ${{
+                                            manual: 'All actions require approval',
+                                            supervised: 'Low-risk auto-approved',
+                                            autonomous: 'High-confidence auto-exec',
+                                            night_mode: 'Auto during off-hours'
+                                        }[mode]}
+                                    </div>
+                                </button>
+                            `).join('')}
+                        </div>
+
+                        <div class="mt-6">
+                            <label class="block text-sm font-medium mb-2">
+                                Confidence Threshold: <span id="threshold-display">${status.confidence_threshold || 75}</span>%
+                            </label>
+                            <input type="range" id="confidence-slider" min="0" max="100" step="5" value="${status.confidence_threshold || 75}" 
+                                   oninput="document.getElementById('threshold-display').textContent = this.value"
+                                   class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                            <div class="flex justify-between text-xs text-gray-400 mt-1">
+                                <span>Conservative</span>
+                                <span>Aggressive</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Safety Rails -->
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                            🛡️ Safety Rails
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            ${renderSafetyMetric('Concurrent Actions', safety.current_state?.active_actions || 0, safety.limits?.max_concurrent_actions || 3)}
+                            ${renderSafetyMetric('Recent Rollbacks', safety.current_state?.recent_rollbacks || 0, safety.limits?.max_rollbacks_per_hour || 2)}
+                            <div class="bg-slate-700/50 rounded-lg p-4">
+                                <div class="text-sm text-gray-400">Action Cooldown</div>
+                                <div class="text-2xl font-bold">${safety.limits?.action_cooldown_seconds || 300}s</div>
+                            </div>
+                            <div class="bg-slate-700/50 rounded-lg p-4">
+                                <div class="text-sm text-gray-400">Active Cooldowns</div>
+                                <div class="text-2xl font-bold">${safety.current_state?.active_cooldowns || 0}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Performance Stats -->
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-xl font-bold mb-4">Autonomous Performance</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="bg-gradient-to-br from-green-900/30 to-green-800/20 rounded-lg p-6 border border-green-700/50">
+                                <div class="text-sm text-gray-400 mb-2">Success Rate</div>
+                                <div class="text-4xl font-bold text-green-400">${(stats.success_rate || 0).toFixed(1)}%</div>
+                                <div class="text-sm text-gray-500 mt-1">${stats.successes || 0}/${stats.total || 0} actions</div>
+                            </div>
+                            <div class="bg-gradient-to-br from-blue-900/30 to-blue-800/20 rounded-lg p-6 border border-blue-700/50">
+                                <div class="text-sm text-gray-400 mb-2">Total Executed</div>
+                                <div class="text-4xl font-bold text-blue-400">${stats.total || 0}</div>
+                            </div>
+                            <div class="bg-gradient-to-br from-purple-900/30 to-purple-800/20 rounded-lg p-6 border border-purple-700/50">
+                                <div class="text-sm text-gray-400 mb-2">Avg Confidence</div>
+                                <div class="text-4xl font-bold text-purple-400">${status.confidence_threshold || 75}%</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Outcomes -->
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-xl font-bold mb-4">Recent Autonomous Actions</h3>
+                        ${state.outcomes.length > 0 ? `
+                            <div class="space-y-2">
+                                ${state.outcomes.slice(0, 10).map(outcome => `
+                                    <div class="p-4 rounded-lg border-l-4 ${outcome.success ? 'bg-green-900/20 border-green-500' : 'bg-red-900/20 border-red-500'}">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <div class="flex items-center gap-2 mb-1">
+                                                    <span>${outcome.success ? '✅' : '❌'}</span>
+                                                    <span class="font-bold">${outcome.action_type}</span>
+                                                    <span class="text-gray-400 text-sm">Confidence: ${outcome.confidence}%</span>
+                                                </div>
+                                                <div class="text-sm text-gray-400">${new Date(outcome.timestamp).toLocaleString()}</div>
+                                            </div>
+                                            <div class="text-lg font-bold ${outcome.success ? 'text-green-400' : 'text-red-400'}">
+                                                ${outcome.success ? 'SUCCESS' : 'FAILED'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : '<div class="text-center py-8 text-gray-500">No autonomous actions yet</div>'}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderSafetyMetric(label, current, max) {
+            const percentage = (current / max) * 100;
+            const color = percentage > 80 ? 'bg-red-500' : percentage > 50 ? 'bg-yellow-500' : 'bg-green-500';
+            
+            return `
+                <div class="bg-slate-700/50 rounded-lg p-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-sm text-gray-400">${label}</span>
+                        <span class="font-bold">${current} / ${max}</span>
+                    </div>
+                    <div class="w-full bg-slate-600 rounded-full h-2">
+                        <div class="${color} h-2 rounded-full transition-all" style="width: ${Math.min(percentage, 100)}%"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderServicesView() {
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold">Service Health Dashboard</h2>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        ${state.services.map(service => `
+                            <div class="bg-slate-800 rounded-xl p-6 border-l-4 ${service.status === 'healthy' ? 'border-green-500' : 'border-orange-500'} hover:shadow-xl transition">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div>
+                                        <h3 class="font-bold text-lg">${service.name}</h3>
+                                        <div class="flex items-center gap-2 mt-1">
+                                            <div class="w-2 h-2 rounded-full ${service.status === 'healthy' ? 'bg-green-500 animate-pulse' : 'bg-orange-500'}"></div>
+                                            <span class="text-sm text-gray-400">${service.status}</span>
+                                        </div>
+                                    </div>
+                                    <div class="text-3xl">${service.status === 'healthy' ? '💚' : '⚠️'}</div>
+                                </div>
+
+                                ${service.metrics ? `
+                                    <div class="grid grid-cols-2 gap-3 mb-4">
+                                        ${service.metrics.latency_ms ? `
+                                            <div class="bg-blue-900/30 rounded-lg p-3 border border-blue-700/50">
+                                                <div class="text-xs text-gray-400">Latency</div>
+                                                <div class="text-lg font-bold">${service.metrics.latency_ms}ms</div>
+                                            </div>
+                                        ` : ''}
+                                        ${service.metrics.error_rate_percent !== undefined ? `
+                                            <div class="bg-red-900/30 rounded-lg p-3 border border-red-700/50">
+                                                <div class="text-xs text-gray-400">Error Rate</div>
+                                                <div class="text-lg font-bold">${service.metrics.error_rate_percent}%</div>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                ` : ''}
+
+                                <div class="flex justify-between text-sm text-gray-400 pt-3 border-t border-slate-700">
+                                    <span>${service.anomaly_count} anomalies</span>
+                                    <span>${service.incident_count} incidents</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAnalyticsView() {
+            const totalIncidents = state.incidents.length;
+            const criticalIncidents = state.incidents.filter(i => i.severity === 'critical').length;
+            const avgConfidence = state.incidents.length > 0 
+                ? state.incidents.reduce((sum, i) => sum + (i.confidence || 0), 0) / state.incidents.length 
+                : 0;
+
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold">Analytics & Insights</h2>
+
+                    <!-- Key Metrics -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl p-6 text-white">
+                            <div class="text-sm opacity-90 mb-2">Total Incidents</div>
+                            <div class="text-4xl font-bold">${totalIncidents}</div>
+                        </div>
+                        <div class="bg-gradient-to-br from-red-600 to-red-700 rounded-xl p-6 text-white">
+                            <div class="text-sm opacity-90 mb-2">Critical</div>
+                            <div class="text-4xl font-bold">${criticalIncidents}</div>
+                        </div>
+                        <div class="bg-gradient-to-br from-green-600 to-green-700 rounded-xl p-6 text-white">
+                            <div class="text-sm opacity-90 mb-2">Avg Confidence</div>
+                            <div class="text-4xl font-bold">${avgConfidence.toFixed(0)}%</div>
+                        </div>
+                        <div class="bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl p-6 text-white">
+                            <div class="text-sm opacity-90 mb-2">Anomalies</div>
+                            <div class="text-4xl font-bold">${state.anomalies.length}</div>
+                        </div>
+                    </div>
+
+                    <!-- Learning Progress -->
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-xl font-bold mb-4">Learning Progress</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <div class="flex justify-between mb-2">
+                                    <span>Incidents Analyzed</span>
+                                    <span class="font-bold">${state.learningStats.total_incidents_learned || 0}</span>
+                                </div>
+                                <div class="w-full bg-slate-700 rounded-full h-2">
+                                    <div class="bg-blue-500 h-2 rounded-full" style="width: ${Math.min((state.learningStats.total_incidents_learned || 0) * 2, 100)}%"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between mb-2">
+                                    <span>Actions Recorded</span>
+                                    <span class="font-bold">${state.learningStats.total_actions_recorded || 0}</span>
+                                </div>
+                                <div class="w-full bg-slate-700 rounded-full h-2">
+                                    <div class="bg-purple-500 h-2 rounded-full" style="width: ${Math.min((state.learningStats.total_actions_recorded || 0) * 3, 100)}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Service Health Distribution -->
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-xl font-bold mb-4">Service Health Distribution</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            ${renderHealthMetric('Healthy', state.services.filter(s => s.status === 'healthy').length, 'green')}
+                            ${renderHealthMetric('Degraded', state.services.filter(s => s.status === 'degraded').length, 'orange')}
+                            ${renderHealthMetric('Critical', state.services.filter(s => s.status === 'critical').length, 'red')}
+                            ${renderHealthMetric('Total', state.services.length, 'blue')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderHealthMetric(label, value, color) {
+            const colors = {
+                green: 'bg-green-900/30 border-green-700/50 text-green-400',
+                orange: 'bg-orange-900/30 border-orange-700/50 text-orange-400',
+                red: 'bg-red-900/30 border-red-700/50 text-red-400',
+                blue: 'bg-blue-900/30 border-blue-700/50 text-blue-400'
+            };
+            
+            return `
+                <div class="${colors[color]} rounded-lg p-6 border">
+                    <div class="text-sm mb-2">${label}</div>
+                    <div class="text-3xl font-bold">${value}</div>
+                </div>
+            `;
+        }
+
+        function renderNotifications() {
+            const criticalIncidents = state.incidents.filter(i => i.severity === 'critical').length;
+            const urgentActions = state.pendingActions.filter(a => a.risk === 'high').length;
+            
+            if (criticalIncidents === 0 && urgentActions === 0) return '';
+            
+            return `
+                <div class="fixed bottom-6 right-6 space-y-3 max-w-md z-50">
+                    ${criticalIncidents > 0 ? `
+                        <div class="bg-red-900 border-2 border-red-600 rounded-lg p-4 shadow-2xl slide-in">
+                            <div class="flex items-center gap-3">
+                                <span class="text-3xl animate-pulse">🚨</span>
+                                <div>
+                                    <div class="font-bold">Critical Alert</div>
+                                    <div class="text-sm">${criticalIncidents} critical incident${criticalIncidents > 1 ? 's' : ''} detected</div>
+                                </div>
+                                <button onclick="switchView('incidents')" class="ml-auto bg-red-700 hover:bg-red-600 px-3 py-1 rounded text-sm font-bold">
+                                    View
+                                </button>
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    ${urgentActions > 0 ? `
+                        <div class="bg-orange-900 border-2 border-orange-600 rounded-lg p-4 shadow-2xl slide-in">
+                            <div class="flex items-center gap-3">
+                                <span class="text-3xl animate-pulse">⚡</span>
+                                <div>
+                                    <div class="font-bold">Action Required</div>
+                                    <div class="text-sm">${urgentActions} high-risk action${urgentActions > 1 ? 's' : ''} pending</div>
+                                </div>
+                                <button onclick="switchView('actions')" class="ml-auto bg-orange-700 hover:bg-orange-600 px-3 py-1 rounded text-sm font-bold">
+                                    Review
+                                </button>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        // Helper Functions
+        function getSeverityClass(severity) {
+            const classes = {
+                critical: 'bg-red-100 text-red-800 border border-red-300',
+                high: 'bg-orange-100 text-orange-800 border border-orange-300',
+                medium: 'bg-yellow-100 text-yellow-800 border border-yellow-300',
+                low: 'bg-blue-100 text-blue-800 border border-blue-300'
+            };
+            return classes[severity] || classes.medium;
+        }
+
+        function getRiskClass(risk) {
+            const classes = {
+                low: 'bg-green-100 text-green-800',
+                medium: 'bg-orange-100 text-orange-800',
+                high: 'bg-red-100 text-red-800'
+            };
+            return classes[risk] || classes.medium;
+        }
+
+        function getStatusClass(status) {
+            const classes = {
+                pending: 'bg-yellow-900/50 text-yellow-300',
+                approved: 'bg-blue-900/50 text-blue-300',
+                executing: 'bg-purple-900/50 text-purple-300',
+                success: 'bg-green-900/50 text-green-300',
+                failed: 'bg-red-900/50 text-red-300',
+                rejected: 'bg-gray-900/50 text-gray-300'
+            };
+            return classes[status] || classes.pending;
+        }
+
+        function formatTime(timestamp) {
+            if (!timestamp) return 'Unknown';
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = Math.floor((now - date) / 60000);
+            if (diff < 1) return 'Just now';
+            if (diff < 60) return `${diff}m ago`;
+            if (diff < 1440) return `${Math.floor(diff / 60)}h ago`;
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        }
+
+        function viewIncident(incidentId) {
+            state.selectedIncident = incidentId;
+            // Could expand to show detailed incident modal
+            alert('Incident details: ' + incidentId);
+        }
+
+        async function approveAction(actionId) {
+            if (!confirm('Approve this action for execution?')) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/v2/actions/approve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action_id: actionId,
+                        approved_by: 'dashboard_user',
+                        notes: 'Approved via unified dashboard'
+                    })
+                });
+                
+                if (response.ok) {
+                    alert('✅ Action approved!');
+                    fetchAllData();
+                } else {
+                    alert('❌ Failed to approve action');
+                }
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+
+        async function rejectAction(actionId) {
+            if (!confirm('Reject this action?')) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/v2/actions/reject`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action_id: actionId,
+                        approved_by: 'dashboard_user',
+                        notes: 'Rejected via unified dashboard'
+                    })
+                });
+                
+                if (response.ok) {
+                    alert('✅ Action rejected');
+                    fetchAllData();
+                } else {
+                    alert('❌ Failed to reject action');
+                }
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+
+        async function setAutonomousMode(mode) {
+            const threshold = document.getElementById('confidence-slider')?.value || 75;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/v3/autonomous/mode`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mode: mode,
+                        confidence_threshold: parseInt(threshold)
+                    })
+                });
+                
+                if (response.ok) {
+                    alert(`✅ Mode changed to ${mode}`);
+                    fetchAllData();
+                } else {
+                    alert('❌ Failed to change mode');
+                }
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchAllData();
+        });
+    </script>
+</body>
+</html>
