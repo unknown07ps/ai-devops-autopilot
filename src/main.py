@@ -707,6 +707,7 @@ async def get_services():
 
 # Serve dashboard HTML (optional - for standalone deployment)
 
+    
 @app.get("/dashboard", response_class=HTMLResponse)
 async def get_dashboard():
     """
@@ -1124,6 +1125,36 @@ async def get_dashboard():
 </body>
 </html>
     """
+    
+@app.get("/dashboard/phase2", response_class=HTMLResponse)
+async def get_phase2_dashboard():
+    """
+    Serve Phase 2 dashboard with enhanced features
+    """
+    try:
+        # Explicitly use UTF-8 encoding to handle emojis and special characters
+        with open('dashboard_phase2.html', 'r', encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        return """
+        <html>
+            <body style="font-family: sans-serif; padding: 40px; text-align: center;">
+                <h1>❌ Phase 2 Dashboard Not Found</h1>
+                <p>Please ensure <code>dashboard_phase2.html</code> exists in the project root.</p>
+                <p><a href="/dashboard">← Back to Phase 1 Dashboard</a></p>
+            </body>
+        </html>
+        """
+    except Exception as e:
+        return f"""
+        <html>
+            <body style="font-family: sans-serif; padding: 40px; text-align: center;">
+                <h1>❌ Error Loading Dashboard</h1>
+                <p>Error: {str(e)}</p>
+                <p><a href="/dashboard">← Back to Phase 1 Dashboard</a></p>
+            </body>
+        </html>
+        """
 
 if __name__ == "__main__":
     import uvicorn
