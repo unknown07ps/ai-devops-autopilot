@@ -390,6 +390,373 @@ async def get_config():
         "action_cooldown_seconds": 300,
         "max_concurrent_actions": 3
     }
+    
+# ============================================================================
+# Phase 3 API Endpoints - Add to src/main.py
+# ============================================================================
+
+from pydantic import BaseModel
+from typing import Optional
+
+class AutonomousModeUpdate(BaseModel):
+    mode: str
+    confidence_threshold: Optional[int] = None
+
+# Initialize autonomous executor (add to main.py after redis_client)
+try:
+    from src.autonomous_executor import AutonomousExecutor
+    from src.worker_phase3 import SimpleActionExecutor
+    
+    action_executor = SimpleActionExecutor(redis_client)
+    autonomous_executor = AutonomousExecutor(redis_client, action_executor)
+    AUTONOMOUS_ENABLED = True
+except Exception as e:
+    print(f"[WARNING] Autonomous executor not available: {e}")
+    autonomous_executor = None
+    AUTONOMOUS_ENABLED = False
+
+@app.get("/api/v3/autonomous/status")
+async def get_autonomous_status():
+    """Get current autonomous execution status"""
+    try:
+        if not AUTONOMOUS_ENABLED or not autonomous_executor:
+            return {
+                "autonomous_enabled": False,
+                "message": "Autonomous mode not initialized",
+                "execution_mode": "manual"
+            }
+        
+        stats = autonomous_executor.get_autonomous_stats()
+        
+        return {
+            "autonomous_enabled": True,
+            "execution_mode": stats['execution_mode'],
+            "confidence_threshold": stats['confidence_threshold'],
+            "total_autonomous_actions": stats['total_autonomous_actions'],
+            "successful_actions": stats['successful_actions'],
+            "success_rate": stats['success_rate'],
+            "active_actions": stats['active_actions'],
+            "learning_weights": stats['learning_weights'],
+            "night_mode_active": stats.get('is_night_mode_active'),
+            "status": "operational"
+        }
+    except Exception as e:
+        print(f"[API ERROR] get_autonomous_status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v3/autonomous/mode")
+async def set_autonomous_mode(update: AutonomousModeUpdate):
+    """Change autonomous execution mode"""
+    try:
+        if not AUTONOMOUS_ENABLED or not autonomous_executor:
+            raise HTTPException(
+                status_code=503,
+                detail="Autonomous mode not available"
+            )
+        
+        # Validate mode
+        from src.autonomous_executor import ExecutionMode
+        valid_modes = {
+            "manual": ExecutionMode.MANUAL,
+            "supervised": ExecutionMode.SUPERVISED,
+            "autonomous": ExecutionMode.AUTONOMOUS,
+            "night_mode": ExecutionMode.NIGHT_MODE
+        }
+        
+        if update.mode not in valid_modes:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid mode. Must be one of: {list(valid_modes.keys())}"
+            )
+        
+        # Update mode
+        autonomous_executor.set_execution_mode(valid_modes[update.mode])
+        
+        # Update confidence threshold if provided
+        if update.confidence_threshold is not None:
+            if not 0 <= update.confidence_threshold <= 100:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Confidence threshold must be between 0 and 100"
+                )
+            autonomous_executor.confidence_threshold = update.confidence_threshold
+        
+        return {
+            "status": "success",
+            "mode": update.mode,
+            "confidence_threshold": autonomous_executor.confidence_threshold,
+            "message": f"Autonomous mode changed to {update.mode}",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[API ERROR] set_autonomous_mode: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v3/autonomous/outcomes")
+async def get_autonomous_outcomes(limit: int = 50, success_only: bool = False):
+    """Get autonomous action outcomes for learning analysis"""
+    try:
+        outcomes_data = redis_client.lrange('autonomous_outcomes', 0, limit - 1)
+        
+        outcomes = []
+        for outcome_json in outcomes_data:
+            outcome = json.loads(outcome_json)
+            
+            # Filter by success if requested
+            if success_only and not outcome.get('success'):
+                continue
+            
+            outcomes.append(outcome)
+        
+        # Calculate statistics
+        total = len(outcomes)
+        successes = sum(1 for o in outcomes if o.get('success'))
+        failures = total - successes
+        
+        # Group by action type
+        by_action_type = {}
+        for outcome in outcomes:
+            action_type = outcome.get('action_type', 'unknown')
+            if action_type not in by_action_type:
+                by_action_type[action_type] = {'total': 0, 'success': 0}
+            
+            by_action_type[action_type]['total'] += 1
+            if outcome.get('success'):
+                by_action_type[action_type]['success'] += 1
+        
+        # Calculate per-type success rates
+        action_type_stats = []
+        for action_type, stats in by_action_type.items():
+            success_rate = (stats['success'] / stats['total'] * 100) if stats['total'] > 0 else 0
+            action_type_stats.append({
+                'action_type': action_type,
+                'total': stats['total'],
+                'successes': stats['success'],
+                'success_rate': round(success_rate, 1)
+            })
+        
+        return {
+            "outcomes": outcomes[:limit],
+            "statistics": {
+                "total": total,
+                "successes": successes,
+                "failures": failures,
+                "success_rate": round((successes / total * 100) if total > 0 else 0, 1),
+                "by_action_type": action_type_stats
+            },
+            "limit": limit
+        }
+    except Exception as e:
+        print(f"[API ERROR] get_autonomous_outcomes: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v3/autonomous/safety-status")
+async def get_safety_status():
+    """Get current safety rail status and limits"""
+    try:
+        if not AUTONOMOUS_ENABLED or not autonomous_executor:
+            return {
+                "safety_rails_active": False,
+                "message": "Autonomous mode not available"
+            }
+        
+        # Get recent rollback count
+        recent_rollbacks = autonomous_executor._count_recent_actions('rollback', hours=1)
+        
+        # Calculate time until cooldowns expire
+        active_cooldowns = []
+        current_time = datetime.now(timezone.utc).timestamp()
+        
+        for key, last_time in autonomous_executor.last_action_time.items():
+            remaining = autonomous_executor.action_cooldown_seconds - (current_time - last_time)
+            if remaining > 0:
+                service, action_type = key.split(':')
+                active_cooldowns.append({
+                    'service': service,
+                    'action_type': action_type,
+                    'remaining_seconds': int(remaining)
+                })
+        
+        return {
+            "safety_rails_active": True,
+            "limits": {
+                "max_concurrent_actions": autonomous_executor.max_concurrent_actions,
+                "action_cooldown_seconds": autonomous_executor.action_cooldown_seconds,
+                "max_rollbacks_per_hour": autonomous_executor.max_rollbacks_per_hour,
+                "max_scale_factor": autonomous_executor.max_scale_factor
+            },
+            "current_state": {
+                "active_actions": len(autonomous_executor.active_actions),
+                "active_cooldowns": len(active_cooldowns),
+                "recent_rollbacks": recent_rollbacks,
+                "cooldowns": active_cooldowns
+            },
+            "status": "operational"
+        }
+    except Exception as e:
+        print(f"[API ERROR] get_safety_status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v3/autonomous/confidence-breakdown/{action_id}")
+async def get_confidence_breakdown(action_id: str):
+    """Get detailed confidence breakdown for an action"""
+    try:
+        action_data = redis_client.get(f"action:{action_id}")
+        if not action_data:
+            raise HTTPException(status_code=404, detail="Action not found")
+        
+        action = json.loads(action_data)
+        
+        # Check if action has autonomous metadata
+        if 'autonomous_confidence' not in action:
+            return {
+                "action_id": action_id,
+                "message": "This action was not evaluated autonomously",
+                "action_type": action.get('action_type'),
+                "status": action.get('status')
+            }
+        
+        return {
+            "action_id": action_id,
+            "action_type": action.get('action_type'),
+            "service": action.get('service'),
+            "overall_confidence": action.get('autonomous_confidence'),
+            "reasoning": action.get('autonomous_reasoning'),
+            "status": action.get('status'),
+            "executed_at": action.get('executed_at'),
+            "completed_at": action.get('completed_at'),
+            "result": action.get('result')
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[API ERROR] get_confidence_breakdown: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v3/autonomous/adjust-weights")
+async def adjust_learning_weights(
+    rule_weight: Optional[float] = None,
+    ai_weight: Optional[float] = None,
+    historical_weight: Optional[float] = None
+):
+    """Manually adjust learning weights (for experimentation)"""
+    try:
+        if not AUTONOMOUS_ENABLED or not autonomous_executor:
+            raise HTTPException(
+                status_code=503,
+                detail="Autonomous mode not available"
+            )
+        
+        weights = []
+        if rule_weight is not None:
+            weights.append(rule_weight)
+        if ai_weight is not None:
+            weights.append(ai_weight)
+        if historical_weight is not None:
+            weights.append(historical_weight)
+        
+        # Validate weights
+        if weights:
+            if any(w < 0 or w > 1 for w in weights):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Weights must be between 0 and 1"
+                )
+            
+            # Update weights
+            if rule_weight is not None:
+                autonomous_executor.rule_weight = rule_weight
+            if ai_weight is not None:
+                autonomous_executor.ai_weight = ai_weight
+            if historical_weight is not None:
+                autonomous_executor.historical_weight = historical_weight
+            
+            # Normalize to sum to 1.0
+            total = (autonomous_executor.rule_weight + 
+                    autonomous_executor.ai_weight + 
+                    autonomous_executor.historical_weight)
+            
+            autonomous_executor.rule_weight /= total
+            autonomous_executor.ai_weight /= total
+            autonomous_executor.historical_weight /= total
+        
+        return {
+            "status": "success",
+            "learning_weights": {
+                "rule_based": round(autonomous_executor.rule_weight, 3),
+                "ai": round(autonomous_executor.ai_weight, 3),
+                "historical": round(autonomous_executor.historical_weight, 3)
+            },
+            "message": "Learning weights adjusted"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[API ERROR] adjust_learning_weights: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v3/autonomous/action-history")
+async def get_autonomous_action_history(
+    limit: int = 50,
+    action_type: Optional[str] = None,
+    success_only: bool = False
+):
+    """Get history of autonomous actions with filtering"""
+    try:
+        # Get all actions
+        action_keys = redis_client.keys("action:*")
+        actions = []
+        
+        for key in action_keys[:limit * 2]:  # Get more to allow for filtering
+            action_data = redis_client.get(key)
+            if action_data:
+                action = json.loads(action_data)
+                
+                # Only include autonomous actions
+                if 'autonomous_confidence' not in action:
+                    continue
+                
+                # Filter by action type
+                if action_type and action.get('action_type') != action_type:
+                    continue
+                
+                # Filter by success
+                if success_only:
+                    result = action.get('result', {})
+                    if not result.get('success'):
+                        continue
+                
+                actions.append({
+                    'action_id': action['id'],
+                    'action_type': action['action_type'],
+                    'service': action['service'],
+                    'confidence': action['autonomous_confidence'],
+                    'status': action['status'],
+                    'executed_at': action.get('executed_at'),
+                    'completed_at': action.get('completed_at'),
+                    'success': action.get('result', {}).get('success'),
+                    'duration_seconds': action.get('result', {}).get('duration_seconds')
+                })
+        
+        # Sort by execution time (most recent first)
+        actions.sort(
+            key=lambda x: x.get('executed_at', ''), 
+            reverse=True
+        )
+        
+        return {
+            "actions": actions[:limit],
+            "total": len(actions),
+            "filters": {
+                "action_type": action_type,
+                "success_only": success_only
+            }
+        }
+    except Exception as e:
+        print(f"[API ERROR] get_autonomous_action_history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Background processing functions
