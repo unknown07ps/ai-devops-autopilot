@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI DevOps Autopilot - Phase 3 Autonomous</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 to-slate-800">
+    <div id="app"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let currentTab = 'overview';
+        let autoRefresh = false;
+        let refreshInterval = null;
+        
+        let state = {
+            autonomousStatus: null,
+            safetyStatus: null,
+            outcomes: null,
+            actionHistory: null,
+            loading: true
+        };
+
+        async function fetchAllData() {
+            try {
+                const [statusRes, safetyRes, outcomesRes, historyRes] = await Promise.all([
+                    fetch(`${API_BASE}/api/v3/autonomous/status`).catch(() => null),
+                    fetch(`${API_BASE}/api/v3/autonomous/safety-status`).catch(() => null),
+                    fetch(`${API_BASE}/api/v3/autonomous/outcomes?limit=50`).catch(() => null),
+                    fetch(`${API_BASE}/api/v3/autonomous/action-history?limit=20`).catch(() => null)
+                ]);
+
+                if (statusRes?.ok) state.autonomousStatus = await statusRes.json();
+                if (safetyRes?.ok) state.safetyStatus = await safetyRes.json();
+                if (outcomesRes?.ok) state.outcomes = await outcomesRes.json();
+                if (historyRes?.ok) state.actionHistory = await historyRes.json();
+                
+                state.loading = false;
+                render();
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                state.loading = false;
+                renderError(error.message);
+            }
+        }
+
+        async function changeMode(mode, threshold) {
+            try {
+                const response = await fetch(`${API_BASE}/api/v3/autonomous/mode`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode, confidence_threshold: threshold })
+                });
+                
+                if (response.ok) {
+                    await fetchAllData();
+                    alert(`Mode changed to ${mode}`);
+                } else {
+                    alert('Error changing mode');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        function toggleAutoRefresh() {
+            autoRefresh = !autoRefresh;
+            if (autoRefresh) {
+                refreshInterval = setInterval(fetchAllData, 10000);
+            } else {
+                clearInterval(refreshInterval);
+            }
+            render();
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            render();
+        }
+
+        function getModeColor(mode) {
+            const colors = {
+                manual: 'gray',
+                supervised: 'blue',
+                autonomous: 'green',
+                night_mode: 'purple'
+            };
+            return colors[mode] || 'gray';
+        }
+
+        function renderError(message) {
+            document.getElementById('app').innerHTML = `
+                <div class="min-h-screen flex items-center justify-center p-6">
+                    <div class="bg-slate-800 rounded-xl shadow-lg p-8 max-w-2xl w-full border border-slate-700">
+                        <div class="text-center">
+                            <div class="text-6xl mb-4">⚠️</div>
+                            <h2 class="text-2xl font-bold text-gray-100 mb-4">Connection Error</h2>
+                            <div class="bg-red-900/20 border border-red-600/50 rounded-lg p-4 mb-6 text-left">
+                                <p class="text-sm text-red-300">${message}</p>
+                            </div>
+                            <div class="bg-blue-900/20 border border-blue-600/50 rounded-lg p-6 mb-6 text-left">
+                                <p class="font-semibold text-gray-100 mb-3">Quick Fix:</p>
+                                <ol class="space-y-2 text-sm text-gray-300">
+                                    <li>1. Start API: <code class="bg-slate-700 px-2 py-1 rounded">python src/main.py</code></li>
+                                    <li>2. Start Worker: <code class="bg-slate-700 px-2 py-1 rounded">python src/worker_phase3.py</code></li>
+                                    <li>3. Refresh this page</li>
+                                </ol>
+                            </div>
+                            <button onclick="fetchAllData()" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700">
+                                Retry Connection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function render() {
+            if (state.loading) {
+                document.getElementById('app').innerHTML = `
+                    <div class="min-h-screen flex items-center justify-center">
+                        <div class="text-center">
+                            <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                            <p class="text-gray-300">Loading Phase 3 Dashboard...</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            const app = document.getElementById('app');
+            app.innerHTML = `
+                <div class="min-h-screen text-gray-100">
+                    <!-- Header -->
+                    <div class="bg-slate-800/50 border-b border-slate-700 backdrop-blur-sm">
+                        <div class="max-w-7xl mx-auto px-6 py-6">
+                            <div class="flex items-center justify-between mb-6">
+                                <div>
+                                    <h1 class="text-3xl font-bold flex items-center gap-3">
+                                        <span class="bg-gradient-to-br from-blue-500 to-purple-600 p-3 rounded-xl">⚡</span>
+                                        AI DevOps Autopilot - Phase 3
+                                    </h1>
+                                    <p class="text-gray-400 mt-1">Autonomous Incident Response</p>
+                                </div>
+                                
+                                <div class="flex gap-3">
+                                    <button onclick="toggleAutoRefresh()" class="${autoRefresh ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-700 hover:bg-slate-600'} px-4 py-2 rounded-lg font-medium transition-all">
+                                        ${autoRefresh ? '🔄 Auto' : '⏸️ Manual'}
+                                    </button>
+                                    <button onclick="fetchAllData()" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-medium transition-all">
+                                        Refresh
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Tabs -->
+                            <div class="flex gap-2">
+                                ${['overview', 'safety', 'outcomes', 'history', 'settings'].map(tab => `
+                                    <button onclick="switchTab('${tab}')" class="${currentTab === tab ? 'bg-slate-700 text-blue-400 border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-200 hover:bg-slate-700/50'} px-6 py-3 rounded-t-lg font-medium transition-all">
+                                        ${tab.charAt(0).toUpperCase() + tab.slice(1)}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Content -->
+                    <div class="max-w-7xl mx-auto px-6 py-8">
+                        ${renderTabContent()}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderTabContent() {
+            switch(currentTab) {
+                case 'overview': return renderOverview();
+                case 'safety': return renderSafety();
+                case 'outcomes': return renderOutcomes();
+                case 'history': return renderHistory();
+                case 'settings': return renderSettings();
+                default: return '';
+            }
+        }
+
+        function renderOverview() {
+            const status = state.autonomousStatus || {};
+            const stats = state.outcomes?.statistics || {};
+            
+            return `
+                <div class="space-y-6">
+                    <!-- Stats Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                            <div class="inline-block p-3 rounded-lg bg-blue-900/30 text-blue-400 mb-3">📊</div>
+                            <div class="text-sm text-gray-400 mb-1">Execution Mode</div>
+                            <div class="text-3xl font-bold mb-1">${status.execution_mode || 'N/A'}</div>
+                            <div class="text-sm text-gray-500">${status.autonomous_enabled ? 'Active' : 'Disabled'}</div>
+                        </div>
+                        
+                        <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                            <div class="inline-block p-3 rounded-lg bg-green-900/30 text-green-400 mb-3">📈</div>
+                            <div class="text-sm text-gray-400 mb-1">Success Rate</div>
+                            <div class="text-3xl font-bold mb-1">${(stats.success_rate || 0).toFixed(1)}%</div>
+                            <div class="text-sm text-gray-500">${stats.successes || 0}/${stats.total || 0} actions</div>
+                        </div>
+                        
+                        <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                            <div class="inline-block p-3 rounded-lg bg-purple-900/30 text-purple-400 mb-3">⚡</div>
+                            <div class="text-sm text-gray-400 mb-1">Confidence Threshold</div>
+                            <div class="text-3xl font-bold mb-1">${status.confidence_threshold || 75}%</div>
+                            <div class="text-sm text-gray-500">Min for auto-exec</div>
+                        </div>
+                        
+                        <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                            <div class="inline-block p-3 rounded-lg bg-orange-900/30 text-orange-400 mb-3">🛡️</div>
+                            <div class="text-sm text-gray-400 mb-1">Active Actions</div>
+                            <div class="text-3xl font-bold mb-1">${status.active_actions || 0}</div>
+                            <div class="text-sm text-gray-500">Currently executing</div>
+                        </div>
+                    </div>
+
+                    ${status.learning_weights ? `
+                        <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                            <h3 class="text-xl font-bold mb-4">Learning Weights</h3>
+                            <div class="grid grid-cols-3 gap-4">
+                                ${renderWeightBar('Rule-based', status.learning_weights.rule_based, 'bg-blue-500')}
+                                ${renderWeightBar('AI Analysis', status.learning_weights.ai, 'bg-purple-500')}
+                                ${renderWeightBar('Historical', status.learning_weights.historical, 'bg-green-500')}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${stats.by_action_type && stats.by_action_type.length > 0 ? `
+                        <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                            <h3 class="text-xl font-bold mb-4">Action Type Performance</h3>
+                            <div class="space-y-3">
+                                ${stats.by_action_type.map(action => `
+                                    <div class="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
+                                        <div>
+                                            <div class="font-semibold">${action.action_type}</div>
+                                            <div class="text-sm text-gray-400">${action.successes}/${action.total} successful</div>
+                                        </div>
+                                        <div class="text-2xl font-bold ${action.success_rate > 80 ? 'text-green-400' : action.success_rate > 60 ? 'text-yellow-400' : 'text-red-400'}">
+                                            ${action.success_rate.toFixed(0)}%
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function renderWeightBar(label, value, color) {
+            return `
+                <div>
+                    <div class="flex justify-between text-sm mb-2">
+                        <span>${label}</span>
+                        <span class="font-semibold">${(value * 100).toFixed(0)}%</span>
+                    </div>
+                    <div class="w-full bg-slate-700 rounded-full h-3">
+                        <div class="${color} h-3 rounded-full transition-all" style="width: ${value * 100}%"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderSafety() {
+            const safety = state.safetyStatus || {};
+            const limits = safety.limits || {};
+            const stateData = safety.current_state || {};
+
+            return `
+                <div class="space-y-6">
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                            🛡️ Safety Rails Status
+                        </h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            ${renderSafetyMetric('Concurrent Actions', stateData.active_actions || 0, limits.max_concurrent_actions || 3)}
+                            ${renderSafetyMetric('Recent Rollbacks', stateData.recent_rollbacks || 0, limits.max_rollbacks_per_hour || 2)}
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="bg-slate-700/50 rounded-lg p-4">
+                                <div class="text-sm text-gray-400">Action Cooldown</div>
+                                <div class="text-2xl font-bold">${limits.action_cooldown_seconds || 0}s</div>
+                            </div>
+                            <div class="bg-slate-700/50 rounded-lg p-4">
+                                <div class="text-sm text-gray-400">Max Scale Factor</div>
+                                <div class="text-2xl font-bold">${limits.max_scale_factor || 0}x</div>
+                            </div>
+                            <div class="bg-slate-700/50 rounded-lg p-4">
+                                <div class="text-sm text-gray-400">Active Cooldowns</div>
+                                <div class="text-2xl font-bold">${stateData.active_cooldowns || 0}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${stateData.cooldowns && stateData.cooldowns.length > 0 ? `
+                        <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                            <h3 class="text-xl font-bold mb-4">Active Cooldowns</h3>
+                            <div class="space-y-2">
+                                ${stateData.cooldowns.map(cd => `
+                                    <div class="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
+                                        <div>
+                                            <div class="font-semibold">${cd.service}</div>
+                                            <div class="text-sm text-gray-400">${cd.action_type}</div>
+                                        </div>
+                                        <div class="text-orange-400">⏱️ ${cd.remaining_seconds}s</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function renderSafetyMetric(label, current, max) {
+            const percentage = (current / max) * 100;
+            const color = percentage > 80 ? 'bg-red-500' : percentage > 50 ? 'bg-yellow-500' : 'bg-green-500';
+            
+            return `
+                <div class="bg-slate-700/50 rounded-lg p-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-sm text-gray-400">${label}</span>
+                        <span class="font-semibold">${current} / ${max}</span>
+                    </div>
+                    <div class="w-full bg-slate-600 rounded-full h-2">
+                        <div class="${color} h-2 rounded-full transition-all" style="width: ${Math.min(percentage, 100)}%"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderOutcomes() {
+            const outcomes = state.outcomes?.outcomes || [];
+
+            return `
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4">Recent Autonomous Outcomes</h3>
+                    ${outcomes.length === 0 ? `
+                        <div class="text-center py-12 text-gray-400">
+                            <div class="text-6xl mb-4">📊</div>
+                            <p>No autonomous actions executed yet</p>
+                        </div>
+                    ` : `
+                        <div class="space-y-2">
+                            ${outcomes.map(outcome => `
+                                <div class="p-4 rounded-lg border-l-4 ${outcome.success ? 'bg-green-900/20 border-green-500' : 'bg-red-900/20 border-red-500'}">
+                                    <div class="flex items-start justify-between">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <span>${outcome.success ? '✅' : '❌'}</span>
+                                                <span class="font-semibold">${outcome.action_type}</span>
+                                                <span class="text-gray-400 text-sm">Confidence: ${outcome.confidence}%</span>
+                                            </div>
+                                            <div class="text-sm text-gray-400">${new Date(outcome.timestamp).toLocaleString()}</div>
+                                        </div>
+                                        <div class="text-lg font-bold ${outcome.success ? 'text-green-400' : 'text-red-400'}">
+                                            ${outcome.success ? 'SUCCESS' : 'FAILED'}
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+
+        function renderHistory() {
+            const actions = state.actionHistory?.actions || [];
+
+            return `
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4">Autonomous Action History</h3>
+                    ${actions.length === 0 ? `
+                        <div class="text-center py-12 text-gray-400">
+                            <div class="text-6xl mb-4">⏱️</div>
+                            <p>No action history available</p>
+                        </div>
+                    ` : `
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="bg-slate-700/50">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold">Status</th>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold">Action</th>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold">Service</th>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold">Confidence</th>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold">Time</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-700">
+                                    ${actions.map(action => `
+                                        <tr class="hover:bg-slate-700/30">
+                                            <td class="px-4 py-3">${action.success ? '✅' : '❌'}</td>
+                                            <td class="px-4 py-3 font-semibold">${action.action_type}</td>
+                                            <td class="px-4 py-3">${action.service}</td>
+                                            <td class="px-4 py-3">
+                                                <span class="px-2 py-1 rounded text-sm ${
+                                                    action.confidence >= 90 ? 'bg-green-900/50 text-green-300' :
+                                                    action.confidence >= 75 ? 'bg-blue-900/50 text-blue-300' :
+                                                    'bg-yellow-900/50 text-yellow-300'
+                                                }">
+                                                    ${action.confidence}%
+                                                </span>
+                                            </td>
+                                            <td class="px-4 py-3 text-sm text-gray-400">${new Date(action.executed_at).toLocaleString()}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+
+        function renderSettings() {
+            const status = state.autonomousStatus || {};
+            const currentMode = status.execution_mode || 'supervised';
+            const currentThreshold = status.confidence_threshold || 75;
+
+            return `
+                <div class="space-y-6">
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-xl font-bold mb-4">⚙️ Execution Mode</h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            ${[
+                                {value: 'manual', label: 'Manual', desc: 'All actions require approval', color: 'gray'},
+                                {value: 'supervised', label: 'Supervised', desc: 'Low-risk auto-approved', color: 'blue'},
+                                {value: 'autonomous', label: 'Autonomous', desc: 'High-confidence auto-executed', color: 'green'},
+                                {value: 'night_mode', label: 'Night Mode', desc: 'Autonomous during off-hours', color: 'purple'}
+                            ].map(mode => `
+                                <button onclick="document.getElementById('selected-mode').value='${mode.value}'; render();" class="p-4 rounded-lg border-2 text-left transition-all ${
+                                    currentMode === mode.value
+                                        ? 'border-' + mode.color + '-500 bg-' + mode.color + '-900/20'
+                                        : 'border-slate-700 hover:border-slate-600'
+                                }">
+                                    <div class="font-semibold mb-1">${mode.label}</div>
+                                    <div class="text-sm text-gray-400">${mode.desc}</div>
+                                </button>
+                            `).join('')}
+                        </div>
+
+                        <input type="hidden" id="selected-mode" value="${currentMode}">
+                        
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium mb-2">
+                                Confidence Threshold: <span id="threshold-value">${currentThreshold}</span>%
+                            </label>
+                            <input type="range" id="threshold-slider" min="0" max="100" step="5" value="${currentThreshold}" 
+                                   oninput="document.getElementById('threshold-value').textContent = this.value"
+                                   class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                            <div class="flex justify-between text-xs text-gray-400 mt-1">
+                                <span>Conservative (0%)</span>
+                                <span>Aggressive (100%)</span>
+                            </div>
+                        </div>
+
+                        <button onclick="applySettings()" class="w-full bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg font-semibold transition-all">
+                            Apply Changes
+                        </button>
+                    </div>
+
+                    <div class="bg-yellow-900/20 border border-yellow-600/50 rounded-xl p-6">
+                        <div class="flex items-start gap-3">
+                            <div class="text-yellow-400 text-2xl">⚠️</div>
+                            <div>
+                                <h4 class="font-semibold text-yellow-400 mb-2">Important Notes</h4>
+                                <ul class="text-sm text-gray-300 space-y-1">
+                                    <li>• Autonomous mode requires extensive testing</li>
+                                    <li>• Start with supervised mode</li>
+                                    <li>• Review action history regularly</li>
+                                    <li>• Safety rails are always active</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function applySettings() {
+            const mode = document.getElementById('selected-mode').value;
+            const threshold = parseInt(document.getElementById('threshold-slider').value);
+            changeMode(mode, threshold);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchAllData();
+        });
+    </script>
+</body>
+</html>

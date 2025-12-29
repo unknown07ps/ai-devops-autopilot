@@ -2,22 +2,19 @@ from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
-from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import redis
 import json
 from typing import List, Dict, Any, Optional
 import os
 from dotenv import load_dotenv
-from pydantic import BaseModel
-from typing import Optional
 
 load_dotenv()
 
 app = FastAPI(
     title="AI DevOps Autopilot",
-    version="0.2.0",
+    version="0.3.0",
     description="Autonomous incident detection, analysis, and response"
 )
 
@@ -54,16 +51,111 @@ class DeploymentEvent(BaseModel):
     status: str  # success, failed, in_progress
     metadata: Dict[str, Any] = {}
 
+class ActionApproval(BaseModel):
+    action_id: str
+    approved_by: str
+    notes: Optional[str] = None
+
+class AutonomousModeUpdate(BaseModel):
+    mode: str
+    confidence_threshold: Optional[int] = None
+
+class LearningWeightsUpdate(BaseModel):
+    rule_weight: Optional[float] = None
+    ai_weight: Optional[float] = None
+    historical_weight: Optional[float] = None
+
+# ============================================================================
+# Phase 3: Initialize Autonomous Executor
+# ============================================================================
+
+AUTONOMOUS_ENABLED = False
+autonomous_executor = None
+
+try:
+    # Import Phase 3 components
+    import sys
+    from pathlib import Path
+    
+    # Ensure src directory is in path
+    src_path = Path(__file__).parent
+    if str(src_path) not in sys.path:
+        sys.path.insert(0, str(src_path))
+    
+    from autonomous_executor import AutonomousExecutor, ExecutionMode
+    
+    # Simple action executor for Phase 3
+    class SimpleActionExecutor:
+        def __init__(self, redis_client):
+            self.redis = redis_client
+            self.dry_run = os.getenv("DRY_RUN_MODE", "true").lower() == "true"
+        
+        async def execute_action(self, action_id: str) -> Dict:
+            """Execute an action"""
+            import asyncio
+            
+            action_data = self.redis.get(f"action:{action_id}")
+            if not action_data:
+                return {"success": False, "error": "Action not found"}
+            
+            action = json.loads(action_data)
+            action_type = action.get('action_type', 'unknown')
+            
+            # Simulate execution
+            await asyncio.sleep(1)
+            
+            if self.dry_run:
+                return {
+                    "success": True,
+                    "dry_run": True,
+                    "message": f"DRY RUN: {action_type} completed",
+                    "duration_seconds": 1
+                }
+            
+            return {
+                "success": True,
+                "message": f"{action_type} completed",
+                "duration_seconds": 1
+            }
+    
+    # Initialize
+    action_executor = SimpleActionExecutor(redis_client)
+    autonomous_executor = AutonomousExecutor(redis_client, action_executor)
+    
+    # Set initial mode from environment
+    initial_mode = os.getenv("EXECUTION_MODE", "supervised")
+    mode_map = {
+        "manual": ExecutionMode.MANUAL,
+        "supervised": ExecutionMode.SUPERVISED,
+        "autonomous": ExecutionMode.AUTONOMOUS,
+        "night_mode": ExecutionMode.NIGHT_MODE
+    }
+    
+    if initial_mode in mode_map:
+        autonomous_executor.set_execution_mode(mode_map[initial_mode])
+    
+    AUTONOMOUS_ENABLED = True
+    print(f"[INIT] ✅ Phase 3 Autonomous Executor initialized (mode: {initial_mode})")
+
+except ImportError as e:
+    print(f"[INIT] ⚠️ Phase 3 components not available: {e}")
+    print("[INIT] Phase 3 endpoints will return 503")
+except Exception as e:
+    print(f"[INIT] ⚠️ Failed to initialize autonomous executor: {e}")
+    print("[INIT] Phase 3 endpoints will return 503")
+
 # Health check
 @app.get("/")
 async def root():
     return {
         "status": "operational",
         "service": "AI DevOps Autopilot",
-        "version": "0.2.0",
+        "version": "0.3.0",
         "features": [
             "Real-time anomaly detection",
             "AI-powered root cause analysis",
+            "Action approval workflow",
+            "Autonomous execution (Phase 3)",
             "Slack notifications",
             "Web dashboard"
         ]
@@ -73,18 +165,26 @@ async def root():
 async def health():
     try:
         redis_client.ping()
-        return {"status": "healthy", "redis": "connected"}
+        return {
+            "status": "healthy",
+            "redis": "connected",
+            "autonomous_mode": AUTONOMOUS_ENABLED
+        }
     except:
-        return {"status": "degraded", "redis": "disconnected"}
+        return {
+            "status": "degraded",
+            "redis": "disconnected",
+            "autonomous_mode": False
+        }
 
-# Ingestion endpoints
+# ============================================================================
+# INGESTION ENDPOINTS
+# ============================================================================
+
 @app.post("/ingest/metrics")
 async def ingest_metrics(metrics: List[MetricPoint], background_tasks: BackgroundTasks):
-    """
-    Ingest metrics in Prometheus-compatible format
-    """
+    """Ingest metrics in Prometheus-compatible format"""
     try:
-        # Store in Redis for processing
         for metric in metrics:
             event = {
                 "type": "metric",
@@ -92,17 +192,14 @@ async def ingest_metrics(metrics: List[MetricPoint], background_tasks: Backgroun
                 "timestamp": metric.timestamp.isoformat()
             }
             try:
-                # Try using streams first
                 redis_client.xadd("events:metrics", event)
             except redis.exceptions.ResponseError as e:
                 if 'unknown command' in str(e).lower():
-                    # Fallback to simple list if streams not available
                     metric_key = f"metric:{metric.labels.get('service', 'unknown')}:{metric.timestamp.timestamp()}"
                     redis_client.setex(metric_key, 3600, metric.model_dump_json())
                 else:
                     raise
         
-        # Trigger anomaly detection in background
         background_tasks.add_task(check_for_anomalies, metrics)
         
         return {
@@ -116,9 +213,7 @@ async def ingest_metrics(metrics: List[MetricPoint], background_tasks: Backgroun
 
 @app.post("/ingest/logs")
 async def ingest_logs(logs: List[LogEntry], background_tasks: BackgroundTasks):
-    """
-    Ingest application logs
-    """
+    """Ingest application logs"""
     try:
         error_count = 0
         for log in logs:
@@ -131,7 +226,6 @@ async def ingest_logs(logs: List[LogEntry], background_tasks: BackgroundTasks):
                 redis_client.xadd("events:logs", event)
             except redis.exceptions.ResponseError as e:
                 if 'unknown command' in str(e).lower():
-                    # Fallback - just store in a simple list
                     redis_client.lpush(f"logs:{log.service}", log.model_dump_json())
                     redis_client.ltrim(f"logs:{log.service}", 0, 999)
                 else:
@@ -140,7 +234,6 @@ async def ingest_logs(logs: List[LogEntry], background_tasks: BackgroundTasks):
             if log.level in ["ERROR", "CRITICAL"]:
                 error_count += 1
         
-        # If we see error spikes, trigger investigation
         if error_count > 5:
             background_tasks.add_task(investigate_error_spike, logs)
         
@@ -155,9 +248,7 @@ async def ingest_logs(logs: List[LogEntry], background_tasks: BackgroundTasks):
 
 @app.post("/ingest/deployment")
 async def ingest_deployment(deployment: DeploymentEvent, background_tasks: BackgroundTasks):
-    """
-    Track deployment events
-    """
+    """Track deployment events"""
     try:
         event = {
             "type": "deployment",
@@ -170,13 +261,11 @@ async def ingest_deployment(deployment: DeploymentEvent, background_tasks: Backg
             if 'unknown command' not in str(e).lower():
                 raise
         
-        # Store deployment in a sorted set for quick lookups
         redis_client.zadd(
             f"deployments:{deployment.service}",
             {deployment.version: deployment.timestamp.timestamp()}
         )
         
-        # Monitor the deployment
         background_tasks.add_task(monitor_deployment, deployment)
         
         return {
@@ -187,17 +276,10 @@ async def ingest_deployment(deployment: DeploymentEvent, background_tasks: Backg
     except Exception as e:
         print(f"[ERROR] Deployment ingestion failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    
-
 
 # ============================================================================
-# PHASE 2 API ENDPOINTS - ADD THESE
+# PHASE 2 API ENDPOINTS
 # ============================================================================
-
-class ActionApproval(BaseModel):
-    action_id: str
-    approved_by: str
-    notes: Optional[str] = None
 
 @app.get("/api/v2/actions/pending")
 async def get_pending_actions(limit: int = 20):
@@ -390,30 +472,10 @@ async def get_config():
         "action_cooldown_seconds": 300,
         "max_concurrent_actions": 3
     }
-    
+
 # ============================================================================
-# Phase 3 API Endpoints - Add to src/main.py
+# PHASE 3 API ENDPOINTS
 # ============================================================================
-
-from pydantic import BaseModel
-from typing import Optional
-
-class AutonomousModeUpdate(BaseModel):
-    mode: str
-    confidence_threshold: Optional[int] = None
-
-# Initialize autonomous executor (add to main.py after redis_client)
-try:
-    from src.autonomous_executor import AutonomousExecutor
-    from src.worker_phase3 import SimpleActionExecutor
-    
-    action_executor = SimpleActionExecutor(redis_client)
-    autonomous_executor = AutonomousExecutor(redis_client, action_executor)
-    AUTONOMOUS_ENABLED = True
-except Exception as e:
-    print(f"[WARNING] Autonomous executor not available: {e}")
-    autonomous_executor = None
-    AUTONOMOUS_ENABLED = False
 
 @app.get("/api/v3/autonomous/status")
 async def get_autonomous_status():
@@ -423,7 +485,8 @@ async def get_autonomous_status():
             return {
                 "autonomous_enabled": False,
                 "message": "Autonomous mode not initialized",
-                "execution_mode": "manual"
+                "execution_mode": "manual",
+                "error": "Phase 3 components not loaded. Check autonomous_executor.py exists in src/"
             }
         
         stats = autonomous_executor.get_autonomous_stats()
@@ -451,11 +514,11 @@ async def set_autonomous_mode(update: AutonomousModeUpdate):
         if not AUTONOMOUS_ENABLED or not autonomous_executor:
             raise HTTPException(
                 status_code=503,
-                detail="Autonomous mode not available"
+                detail="Autonomous mode not available. Check that autonomous_executor.py exists in src/"
             )
         
         # Validate mode
-        from src.autonomous_executor import ExecutionMode
+        from autonomous_executor import ExecutionMode
         valid_modes = {
             "manual": ExecutionMode.MANUAL,
             "supervised": ExecutionMode.SUPERVISED,
@@ -504,7 +567,6 @@ async def get_autonomous_outcomes(limit: int = 50, success_only: bool = False):
         for outcome_json in outcomes_data:
             outcome = json.loads(outcome_json)
             
-            # Filter by success if requested
             if success_only and not outcome.get('success'):
                 continue
             
@@ -636,51 +698,71 @@ async def get_confidence_breakdown(action_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v3/autonomous/adjust-weights")
-async def adjust_learning_weights(
-    rule_weight: Optional[float] = None,
-    ai_weight: Optional[float] = None,
-    historical_weight: Optional[float] = None
-):
+async def adjust_learning_weights(update: LearningWeightsUpdate):
     """Manually adjust learning weights (for experimentation)"""
-    try:
-        if not AUTONOMOUS_ENABLED or not autonomous_executor:
+    # Log what we received
+    print(f"[DEBUG] adjust_weights called with: rule={update.rule_weight}, ai={update.ai_weight}, hist={update.historical_weight}")
+    
+    if not AUTONOMOUS_ENABLED or not autonomous_executor:
+        raise HTTPException(
+            status_code=503,
+            detail="Autonomous mode not available"
+        )
+    
+    # Validate ALL weights IMMEDIATELY before any processing
+    if update.rule_weight is not None:
+        print(f"[DEBUG] Validating rule_weight={update.rule_weight}, type={type(update.rule_weight)}")
+        if not isinstance(update.rule_weight, (int, float)):
+            raise HTTPException(status_code=400, detail="rule_weight must be a number")
+        if update.rule_weight < 0 or update.rule_weight > 1:
+            print(f"[DEBUG] rule_weight {update.rule_weight} is out of range, raising 400")
             raise HTTPException(
-                status_code=503,
-                detail="Autonomous mode not available"
+                status_code=400,
+                detail=f"Weights must be between 0 and 1. rule_weight={update.rule_weight} is invalid."
             )
+    
+    if update.ai_weight is not None:
+        print(f"[DEBUG] Validating ai_weight={update.ai_weight}")
+        if not isinstance(update.ai_weight, (int, float)):
+            raise HTTPException(status_code=400, detail="ai_weight must be a number")
+        if update.ai_weight < 0 or update.ai_weight > 1:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Weights must be between 0 and 1. ai_weight={update.ai_weight} is invalid."
+            )
+    
+    if update.historical_weight is not None:
+        print(f"[DEBUG] Validating historical_weight={update.historical_weight}")
+        if not isinstance(update.historical_weight, (int, float)):
+            raise HTTPException(status_code=400, detail="historical_weight must be a number")
+        if update.historical_weight < 0 or update.historical_weight > 1:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Weights must be between 0 and 1. historical_weight={update.historical_weight} is invalid."
+            )
+    
+    print("[DEBUG] All validations passed, updating weights...")
+    
+    try:
+        # Update weights only after ALL validations pass
+        if update.rule_weight is not None:
+            autonomous_executor.rule_weight = update.rule_weight
+        if update.ai_weight is not None:
+            autonomous_executor.ai_weight = update.ai_weight
+        if update.historical_weight is not None:
+            autonomous_executor.historical_weight = update.historical_weight
         
-        weights = []
-        if rule_weight is not None:
-            weights.append(rule_weight)
-        if ai_weight is not None:
-            weights.append(ai_weight)
-        if historical_weight is not None:
-            weights.append(historical_weight)
+        # Normalize to sum to 1.0
+        total = (autonomous_executor.rule_weight + 
+                autonomous_executor.ai_weight + 
+                autonomous_executor.historical_weight)
         
-        # Validate weights
-        if weights:
-            if any(w < 0 or w > 1 for w in weights):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Weights must be between 0 and 1"
-                )
-            
-            # Update weights
-            if rule_weight is not None:
-                autonomous_executor.rule_weight = rule_weight
-            if ai_weight is not None:
-                autonomous_executor.ai_weight = ai_weight
-            if historical_weight is not None:
-                autonomous_executor.historical_weight = historical_weight
-            
-            # Normalize to sum to 1.0
-            total = (autonomous_executor.rule_weight + 
-                    autonomous_executor.ai_weight + 
-                    autonomous_executor.historical_weight)
-            
+        if total > 0:  # Prevent division by zero
             autonomous_executor.rule_weight /= total
             autonomous_executor.ai_weight /= total
             autonomous_executor.historical_weight /= total
+        
+        print(f"[DEBUG] Weights updated successfully")
         
         return {
             "status": "success",
@@ -758,38 +840,13 @@ async def get_autonomous_action_history(
         print(f"[API ERROR] get_autonomous_action_history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# Background processing functions
-async def check_for_anomalies(metrics: List[MetricPoint]):
-    """
-    Check metrics for anomalies - placeholder for now
-    """
-    print(f"[DETECTION] Checking {len(metrics)} metrics for anomalies...")
-
-async def investigate_error_spike(logs: List[LogEntry]):
-    """
-    Investigate error log spikes
-    """
-    print(f"[ALERT] Error spike detected, investigating...")
-
-async def monitor_deployment(deployment: DeploymentEvent):
-    """
-    Monitor deployment health post-deploy
-    """
-    print(f"[MONITOR] Tracking deployment {deployment.service}:{deployment.version}")
-
-
 # ============================================================================
-# DASHBOARD API ENDPOINTS (Inline to avoid import issues)
+# DASHBOARD API ENDPOINTS
 # ============================================================================
-
-from datetime import timedelta
 
 @app.get("/api/stats")
 async def get_dashboard_stats():
-    """
-    Get high-level dashboard statistics
-    """
+    """Get high-level dashboard statistics"""
     try:
         # Count active incidents
         active_incidents = 0
@@ -799,7 +856,6 @@ async def get_dashboard_stats():
             incidents = redis_client.lrange(service_key, 0, -1)
             for incident_json in incidents:
                 incident = json.loads(incident_json)
-                # Check if incident is recent (last 24h) and not resolved
                 incident_time = datetime.fromisoformat(incident['timestamp'].replace('Z', '+00:00'))
                 if (datetime.utcnow() - incident_time.replace(tzinfo=None)) < timedelta(hours=24):
                     if incident.get('status', 'active') == 'active':
@@ -832,15 +888,12 @@ async def get_dashboard_stats():
         healthy_services = len(all_services - degraded_services)
         total_services = len(all_services) if all_services else 1
         
-        # Calculate average resolution time (mock for now)
-        avg_resolution_minutes = 8.5
-        
         return {
             "active_incidents": active_incidents,
             "critical_anomalies": critical_anomalies,
             "healthy_services": healthy_services,
             "total_services": total_services,
-            "avg_resolution_time_minutes": avg_resolution_minutes,
+            "avg_resolution_time_minutes": 8.5,
             "uptime_percent": round((healthy_services / total_services) * 100, 1) if total_services > 0 else 100
         }
     
@@ -848,26 +901,16 @@ async def get_dashboard_stats():
         print(f"[API ERROR] Failed to get stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/api/incidents")
-async def get_incidents(
-    status: Optional[str] = None,
-    service: Optional[str] = None,
-    limit: int = 50
-):
-    """
-    Get all incidents with optional filtering
-    """
+async def get_incidents(status: Optional[str] = None, service: Optional[str] = None, limit: int = 50):
+    """Get all incidents with optional filtering"""
     try:
         all_incidents = []
-        
-        # Get incidents from all services
         incident_keys = redis_client.keys("incidents:*")
         
         for key in incident_keys:
             service_name = key.decode('utf-8').split(':')[1]
             
-            # Filter by service if specified
             if service and service_name != service:
                 continue
             
@@ -876,22 +919,17 @@ async def get_incidents(
             for incident_json in incidents_json:
                 incident = json.loads(incident_json)
                 
-                # Add ID if not present
                 if 'id' not in incident:
                     incident['id'] = f"{service_name}_{incident['timestamp']}"
                 
-                # Add status if not present
                 if 'status' not in incident:
-                    # Check if incident is old enough to be considered resolved
                     incident_time = datetime.fromisoformat(incident['timestamp'].replace('Z', '+00:00'))
                     time_since = datetime.utcnow() - incident_time.replace(tzinfo=None)
                     incident['status'] = 'resolved' if time_since > timedelta(hours=1) else 'active'
                 
-                # Filter by status if specified
                 if status and incident['status'] != status:
                     continue
                 
-                # Extract key information
                 analysis = incident.get('analysis', {})
                 root_cause = analysis.get('root_cause', {})
                 
@@ -912,38 +950,24 @@ async def get_incidents(
                 
                 all_incidents.append(formatted_incident)
         
-        # Sort by timestamp (most recent first)
         all_incidents.sort(key=lambda x: x['timestamp'], reverse=True)
         
-        return {
-            "incidents": all_incidents[:limit],
-            "total": len(all_incidents)
-        }
+        return {"incidents": all_incidents[:limit], "total": len(all_incidents)}
     
     except Exception as e:
         print(f"[API ERROR] Failed to get incidents: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/api/anomalies")
-async def get_anomalies(
-    service: Optional[str] = None,
-    severity: Optional[str] = None,
-    limit: int = 100
-):
-    """
-    Get recent anomalies with optional filtering
-    """
+async def get_anomalies(service: Optional[str] = None, severity: Optional[str] = None, limit: int = 100):
+    """Get recent anomalies with optional filtering"""
     try:
         all_anomalies = []
-        
-        # Get anomalies from all services
         anomaly_keys = redis_client.keys("recent_anomalies:*")
         
         for key in anomaly_keys:
             service_name = key.decode('utf-8').split(':')[1]
             
-            # Filter by service if specified
             if service and service_name != service:
                 continue
             
@@ -952,11 +976,9 @@ async def get_anomalies(
             for anomaly_json in anomalies_json:
                 anomaly = json.loads(anomaly_json)
                 
-                # Filter by severity if specified
                 if severity and anomaly.get('severity') != severity:
                     continue
                 
-                # Add ID if not present
                 if 'id' not in anomaly:
                     anomaly['id'] = f"{service_name}_{anomaly.get('metric_name')}_{anomaly.get('detected_at')}"
                 
@@ -973,28 +995,19 @@ async def get_anomalies(
                     'detected_at': anomaly.get('detected_at', datetime.utcnow().isoformat())
                 })
         
-        # Sort by timestamp (most recent first)
         all_anomalies.sort(key=lambda x: x['detected_at'], reverse=True)
         
-        return {
-            "anomalies": all_anomalies[:limit],
-            "total": len(all_anomalies)
-        }
+        return {"anomalies": all_anomalies[:limit], "total": len(all_anomalies)}
     
     except Exception as e:
         print(f"[API ERROR] Failed to get anomalies: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/api/services")
 async def get_services():
-    """
-    Get status of all monitored services
-    """
+    """Get status of all monitored services"""
     try:
         services_data = {}
-        
-        # Get all services from baselines
         baseline_keys = redis_client.keys("baseline:*")
         
         for key in baseline_keys:
@@ -1011,14 +1024,13 @@ async def get_services():
                         'anomaly_count': 0
                     }
         
-        # Check for recent anomalies to determine health
         anomaly_keys = redis_client.keys("recent_anomalies:*")
         
         for key in anomaly_keys:
             service_name = key.decode('utf-8').split(':')[1]
             
             if service_name in services_data:
-                anomalies = redis_client.lrange(key, 0, 9)  # Last 10
+                anomalies = redis_client.lrange(key, 0, 9)
                 critical_count = 0
                 
                 for anomaly_json in anomalies:
@@ -1031,9 +1043,7 @@ async def get_services():
                 if critical_count > 0:
                     services_data[service_name]['status'] = 'degraded'
         
-        # Get latest metrics for each service
         for service_name in services_data.keys():
-            # Get latency baseline
             latency_key = f"baseline:{service_name}:api_latency_ms"
             latency_data = redis_client.get(latency_key)
             
@@ -1041,7 +1051,6 @@ async def get_services():
                 baseline = json.loads(latency_data)
                 services_data[service_name]['metrics']['latency_ms'] = round(baseline.get('mean', 0), 2)
             
-            # Get error rate baseline
             error_key = f"baseline:{service_name}:error_rate"
             error_data = redis_client.get(error_key)
             
@@ -1049,7 +1058,6 @@ async def get_services():
                 baseline = json.loads(error_data)
                 services_data[service_name]['metrics']['error_rate_percent'] = round(baseline.get('mean', 0), 2)
             
-            # Count recent incidents
             incident_key = f"incidents:{service_name}"
             incidents = redis_client.lrange(incident_key, 0, -1)
             
@@ -1062,466 +1070,44 @@ async def get_services():
             
             services_data[service_name]['incident_count'] = recent_incidents
         
-        return {
-            "services": list(services_data.values()),
-            "total": len(services_data)
-        }
+        return {"services": list(services_data.values()), "total": len(services_data)}
     
     except Exception as e:
         print(f"[API ERROR] Failed to get services: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Background processing functions
+async def check_for_anomalies(metrics: List[MetricPoint]):
+    """Check metrics for anomalies"""
+    print(f"[DETECTION] Checking {len(metrics)} metrics for anomalies...")
 
-# Serve dashboard HTML (optional - for standalone deployment)
+async def investigate_error_spike(logs: List[LogEntry]):
+    """Investigate error log spikes"""
+    print(f"[ALERT] Error spike detected, investigating...")
 
-    
+async def monitor_deployment(deployment: DeploymentEvent):
+    """Monitor deployment health post-deploy"""
+    print(f"[MONITOR] Tracking deployment {deployment.service}:{deployment.version}")
+
+# Dashboard routes
 @app.get("/dashboard", response_class=HTMLResponse)
 async def get_dashboard():
-    """
-    Serve the interactive dashboard UI directly from localhost:8000/dashboard
-    """
-    return """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI DevOps Autopilot Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .animate-spin { animation: spin 1s linear infinite; }
-    </style>
-</head>
-<body class="bg-gray-100">
-    <div id="app"></div>
+    """Serve Phase 1 dashboard"""
+    # Return inline HTML or load from file
+    return """<!DOCTYPE html>
+<html><body><h1>Dashboard - See dashboard_phase2.html for full version</h1></body></html>"""
 
-    <script>
-        const API_BASE = window.location.origin; // Uses same host automatically
-        let currentTab = 'overview';
-        let autoRefresh = false;
-        let refreshInterval = null;
-
-        async function fetchData() {
-            try {
-                const [stats, incidents, anomalies, services] = await Promise.all([
-                    fetch(`${API_BASE}/api/stats`).then(r => r.ok ? r.json() : null),
-                    fetch(`${API_BASE}/api/incidents`).then(r => r.ok ? r.json() : { incidents: [] }),
-                    fetch(`${API_BASE}/api/anomalies`).then(r => r.ok ? r.json() : { anomalies: [] }),
-                    fetch(`${API_BASE}/api/services`).then(r => r.ok ? r.json() : { services: [] })
-                ]);
-
-                render({ stats, incidents: incidents.incidents, anomalies: anomalies.anomalies, services: services.services });
-            } catch (error) {
-                renderError(error.message);
-            }
-        }
-
-        function renderError(message) {
-            document.getElementById('app').innerHTML = `
-                <div class="min-h-screen flex items-center justify-center p-6">
-                    <div class="bg-white rounded-xl shadow-lg p-8 max-w-2xl w-full">
-                        <div class="text-center">
-                            <div class="text-6xl mb-4">⚠️</div>
-                            <h2 class="text-2xl font-bold text-gray-900 mb-4">Error Loading Dashboard</h2>
-                            <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-left">
-                                <p class="text-sm text-red-800">${message}</p>
-                            </div>
-                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6 text-left">
-                                <p class="font-semibold text-gray-900 mb-3">Quick Fix:</p>
-                                <ol class="space-y-2 text-sm text-gray-700">
-                                    <li><strong>1. Check Worker:</strong> <code class="bg-gray-200 px-2 py-1 rounded">python src/worker.py</code></li>
-                                    <li><strong>2. Generate Test Data:</strong> <code class="bg-gray-200 px-2 py-1 rounded">python test_dashboard.py</code></li>
-                                    <li><strong>3. Refresh this page</strong></li>
-                                </ol>
-                            </div>
-                            <button onclick="fetchData()" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700">
-                                Retry Connection
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        function render(data) {
-            const { stats, incidents, anomalies, services } = data;
-            
-            const app = document.getElementById('app');
-            app.innerHTML = `
-                <div class="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-                    <!-- Header -->
-                    <div class="bg-white border-b border-gray-200 shadow-sm">
-                        <div class="max-w-7xl mx-auto px-6 py-6">
-                            <div class="flex items-center justify-between mb-6">
-                                <div>
-                                    <h1 class="text-3xl font-bold text-gray-900 flex items-center gap-3">
-                                        <span class="bg-gradient-to-br from-blue-600 to-purple-600 p-3 rounded-xl text-white">🧠</span>
-                                        AI DevOps Autopilot
-                                    </h1>
-                                    <p class="text-gray-600 mt-1">Autonomous incident detection and response</p>
-                                </div>
-                                <div class="flex gap-3">
-                                    <button onclick="toggleAutoRefresh()" class="${autoRefresh ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'} px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity">
-                                        ${autoRefresh ? '🔄' : '⏸️'} Auto-refresh ${autoRefresh ? 'ON' : 'OFF'}
-                                    </button>
-                                    <button onclick="fetchData()" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors">
-                                        🔄 Refresh
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <!-- Tabs -->
-                            <div class="flex gap-2 border-b border-gray-200">
-                                <button onclick="switchTab('overview')" class="${currentTab === 'overview' ? 'bg-white text-blue-600 border-b-2 border-blue-600 -mb-px' : 'text-gray-600 hover:text-gray-900'} px-6 py-3 font-medium transition-colors">
-                                    📊 Overview
-                                </button>
-                                <button onclick="switchTab('incidents')" class="${currentTab === 'incidents' ? 'bg-white text-blue-600 border-b-2 border-blue-600 -mb-px' : 'text-gray-600 hover:text-gray-900'} px-6 py-3 font-medium transition-colors">
-                                    🚨 Incidents
-                                </button>
-                                <button onclick="switchTab('anomalies')" class="${currentTab === 'anomalies' ? 'bg-white text-blue-600 border-b-2 border-blue-600 -mb-px' : 'text-gray-600 hover:text-gray-900'} px-6 py-3 font-medium transition-colors">
-                                    📈 Anomalies
-                                </button>
-                                <button onclick="switchTab('services')" class="${currentTab === 'services' ? 'bg-white text-blue-600 border-b-2 border-blue-600 -mb-px' : 'text-gray-600 hover:text-gray-900'} px-6 py-3 font-medium transition-colors">
-                                    🖥️ Services
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Content -->
-                    <div class="max-w-7xl mx-auto px-6 py-8">
-                        ${currentTab === 'overview' ? renderOverview(stats, incidents) : ''}
-                        ${currentTab === 'incidents' ? renderIncidents(incidents) : ''}
-                        ${currentTab === 'anomalies' ? renderAnomalies(anomalies) : ''}
-                        ${currentTab === 'services' ? renderServices(services) : ''}
-                        
-                        <div class="text-center text-sm text-gray-500 mt-8">
-                            ⏰ Last updated: ${new Date().toLocaleTimeString()} • 
-                            <a href="/docs" target="_blank" class="text-blue-600 hover:underline">API Docs</a> • 
-                            <a href="https://github.com/unknown07ps/ai-devops-autopilot" target="_blank" class="text-blue-600 hover:underline">GitHub</a>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderOverview(stats, incidents) {
-            if (!stats) return '<div class="text-center py-12 text-gray-600">⏳ Loading...</div>';
-            
-            return `
-                <div class="space-y-6">
-                    <!-- Stats Cards -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                            <div class="text-gray-600 text-sm font-medium mb-2">🚨 Active Incidents</div>
-                            <div class="text-4xl font-bold ${stats.active_incidents > 0 ? 'text-red-600' : 'text-green-600'}">${stats.active_incidents}</div>
-                            <div class="text-sm text-gray-500 mt-1">Requiring attention</div>
-                        </div>
-                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                            <div class="text-gray-600 text-sm font-medium mb-2">⚠️ Critical Anomalies</div>
-                            <div class="text-4xl font-bold text-orange-600">${stats.critical_anomalies}</div>
-                            <div class="text-sm text-gray-500 mt-1">Last 24 hours</div>
-                        </div>
-                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                            <div class="text-gray-600 text-sm font-medium mb-2">💚 Healthy Services</div>
-                            <div class="text-4xl font-bold text-green-600">${stats.healthy_services}/${stats.total_services}</div>
-                            <div class="text-sm text-gray-500 mt-1">${stats.uptime_percent}% uptime</div>
-                        </div>
-                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                            <div class="text-gray-600 text-sm font-medium mb-2">⏱️ Avg Resolution</div>
-                            <div class="text-4xl font-bold text-blue-600">${stats.avg_resolution_time_minutes}m</div>
-                            <div class="text-sm text-gray-500 mt-1">Time to resolve</div>
-                        </div>
-                    </div>
-
-                    <!-- Recent Incidents -->
-                    <div>
-                        <h2 class="text-2xl font-bold text-gray-900 mb-4">Recent Incidents</h2>
-                        ${incidents && incidents.length > 0 ? `
-                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                ${incidents.slice(0, 6).map(inc => `
-                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-5 hover:shadow-xl hover:border-blue-400 transition-all cursor-pointer" onclick="showIncidentDetails('${inc.id}')">
-                                        <div class="flex items-start justify-between mb-3">
-                                            <div>
-                                                <div class="font-bold text-lg text-gray-900">${inc.service}</div>
-                                                <div class="text-sm text-gray-500">${formatTime(inc.timestamp)}</div>
-                                            </div>
-                                            <div class="flex flex-col items-end gap-2">
-                                                <span class="px-3 py-1 rounded-full text-xs font-bold ${getSeverityClass(inc.severity)}">
-                                                    ${getSeverityEmoji(inc.severity)} ${inc.severity.toUpperCase()}
-                                                </span>
-                                                <span class="text-xs px-2 py-1 rounded ${inc.status === 'active' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}">
-                                                    ${inc.status}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div class="text-sm text-gray-700 mb-3 leading-relaxed">${inc.root_cause}</div>
-                                        <div class="flex items-center justify-between text-xs">
-                                            <div class="flex gap-3 text-gray-600">
-                                                <span>📊 ${inc.anomaly_count} anomalies</span>
-                                                <span>🎯 ${inc.confidence}% confidence</span>
-                                            </div>
-                                            <span class="text-blue-600 font-medium">View Details →</span>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        ` : `
-                            <div class="bg-white rounded-lg border-2 border-gray-200 p-16 text-center">
-                                <div class="text-7xl mb-4">✅</div>
-                                <p class="text-xl text-gray-600 font-semibold mb-2">No incidents detected</p>
-                                <p class="text-gray-500 mb-6">All systems operating normally</p>
-                                <button onclick="window.open('/docs', '_blank')" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
-                                    View API Docs
-                                </button>
-                            </div>
-                        `}
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderIncidents(incidents) {
-            return `
-                <div>
-                    <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-2xl font-bold text-gray-900">All Incidents</h2>
-                        <span class="px-4 py-2 bg-blue-100 text-blue-800 rounded-lg font-semibold">
-                            ${incidents ? incidents.length : 0} Total
-                        </span>
-                    </div>
-                    ${incidents && incidents.length > 0 ? `
-                        <div class="space-y-3">
-                            ${incidents.map(inc => `
-                                <div class="bg-white rounded-lg border-2 border-gray-200 p-6 hover:shadow-xl hover:border-blue-400 transition-all cursor-pointer" onclick="showIncidentDetails('${inc.id}')">
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center gap-4 flex-1">
-                                            <div class="text-4xl">${getSeverityEmoji(inc.severity)}</div>
-                                            <div class="flex-1">
-                                                <div class="flex items-center gap-3 mb-2">
-                                                    <div class="font-bold text-xl text-gray-900">${inc.service}</div>
-                                                    <span class="px-3 py-1 rounded-full text-xs font-bold ${getSeverityClass(inc.severity)}">
-                                                        ${inc.severity.toUpperCase()}
-                                                    </span>
-                                                </div>
-                                                <div class="text-gray-700 mb-2">${inc.root_cause}</div>
-                                                <div class="flex gap-4 text-sm text-gray-600">
-                                                    <span>🕐 ${formatTime(inc.timestamp)}</span>
-                                                    <span>📊 ${inc.anomaly_count} anomalies</span>
-                                                    <span>🎯 ${inc.confidence}% confidence</span>
-                                                    <span class="font-semibold ${inc.status === 'active' ? 'text-red-600' : 'text-green-600'}">
-                                                        ${inc.status === 'active' ? '🔴' : '✅'} ${inc.status}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="text-blue-600 font-medium text-lg">→</div>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    ` : '<div class="bg-white rounded-lg border-2 border-gray-200 p-16 text-center"><div class="text-6xl mb-4">✅</div><p class="text-xl text-gray-600">No incidents</p></div>'}
-                </div>
-            `;
-        }
-
-        function renderAnomalies(anomalies) {
-            return `
-                <div>
-                    <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-2xl font-bold text-gray-900">Recent Anomalies</h2>
-                        <span class="px-4 py-2 bg-orange-100 text-orange-800 rounded-lg font-semibold">
-                            ${anomalies ? anomalies.length : 0} Detected
-                        </span>
-                    </div>
-                    ${anomalies && anomalies.length > 0 ? `
-                        <div class="bg-white rounded-lg border-2 border-gray-200 overflow-hidden shadow-sm">
-                            <div class="overflow-x-auto">
-                                <table class="w-full">
-                                    <thead class="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-300">
-                                        <tr>
-                                            <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Service</th>
-                                            <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Metric</th>
-                                            <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Current</th>
-                                            <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Baseline</th>
-                                            <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Deviation</th>
-                                            <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Severity</th>
-                                            <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Time</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-gray-200">
-                                        ${anomalies.map((a, idx) => `
-                                            <tr class="hover:bg-blue-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}">
-                                                <td class="px-6 py-4 text-sm font-bold text-gray-900">${a.service}</td>
-                                                <td class="px-6 py-4 text-sm text-gray-700">${a.metric_name}</td>
-                                                <td class="px-6 py-4 text-sm font-bold text-red-600">${a.current_value.toFixed(2)}</td>
-                                                <td class="px-6 py-4 text-sm text-gray-600">${a.baseline_mean.toFixed(2)}</td>
-                                                <td class="px-6 py-4">
-                                                    <span class="font-bold text-sm ${a.deviation_percent > 0 ? 'text-red-600' : 'text-green-600'}">
-                                                        ${a.deviation_percent > 0 ? '🔺' : '🔻'} ${Math.abs(a.deviation_percent).toFixed(1)}%
-                                                    </span>
-                                                </td>
-                                                <td class="px-6 py-4">
-                                                    <span class="px-3 py-1 rounded-full text-xs font-bold ${getSeverityClass(a.severity)}">
-                                                        ${a.severity}
-                                                    </span>
-                                                </td>
-                                                <td class="px-6 py-4 text-sm text-gray-600">${formatTime(a.detected_at)}</td>
-                                            </tr>
-                                        `).join('')}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    ` : '<div class="bg-white rounded-lg border-2 border-gray-200 p-16 text-center"><div class="text-6xl mb-4">📊</div><p class="text-xl text-gray-600">No anomalies detected</p></div>'}
-                </div>
-            `;
-        }
-
-        function renderServices(services) {
-            return `
-                <div>
-                    <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-2xl font-bold text-gray-900">Service Health</h2>
-                        <span class="px-4 py-2 bg-green-100 text-green-800 rounded-lg font-semibold">
-                            ${services ? services.length : 0} Services
-                        </span>
-                    </div>
-                    ${services && services.length > 0 ? `
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            ${services.map(s => `
-                                <div class="bg-white rounded-lg border-2 border-gray-200 p-6 hover:shadow-xl transition-all">
-                                    <div class="flex items-center justify-between mb-4">
-                                        <div>
-                                            <h3 class="font-bold text-xl text-gray-900">${s.name}</h3>
-                                            <div class="flex items-center gap-2 mt-2">
-                                                <div class="w-3 h-3 rounded-full ${s.status === 'healthy' ? 'bg-green-500 animate-pulse' : 'bg-orange-500'}"></div>
-                                                <span class="text-sm font-semibold ${s.status === 'healthy' ? 'text-green-700' : 'text-orange-700'}">${s.status.toUpperCase()}</span>
-                                            </div>
-                                        </div>
-                                        <div class="text-4xl">🖥️</div>
-                                    </div>
-                                    ${s.metrics ? `
-                                        <div class="grid grid-cols-2 gap-3 mb-4">
-                                            ${s.metrics.latency_ms !== undefined ? `
-                                                <div class="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                                                    <div class="text-xs text-gray-600 mb-1">⚡ Latency</div>
-                                                    <div class="text-xl font-bold text-blue-700">${s.metrics.latency_ms}<span class="text-sm">ms</span></div>
-                                                </div>
-                                            ` : ''}
-                                            ${s.metrics.error_rate_percent !== undefined ? `
-                                                <div class="bg-red-50 rounded-lg p-3 border border-red-200">
-                                                    <div class="text-xs text-gray-600 mb-1">❌ Errors</div>
-                                                    <div class="text-xl font-bold text-red-700">${s.metrics.error_rate_percent}<span class="text-sm">%</span></div>
-                                                </div>
-                                            ` : ''}
-                                        </div>
-                                    ` : ''}
-                                    <div class="flex justify-between pt-3 border-t border-gray-200">
-                                        <div class="text-center flex-1">
-                                            <div class="text-2xl font-bold text-orange-600">${s.anomaly_count}</div>
-                                            <div class="text-xs text-gray-600">Anomalies</div>
-                                        </div>
-                                        <div class="text-center flex-1 border-l border-gray-200">
-                                            <div class="text-2xl font-bold text-red-600">${s.incident_count}</div>
-                                            <div class="text-xs text-gray-600">Incidents</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    ` : '<div class="bg-white rounded-lg border-2 border-gray-200 p-16 text-center"><div class="text-6xl mb-4">🖥️</div><p class="text-xl text-gray-600">No services monitored</p><p class="text-sm text-gray-500 mt-2">Run test_dashboard.py to generate data</p></div>'}
-                </div>
-            `;
-        }
-
-        function getSeverityClass(severity) {
-            const classes = {
-                critical: 'bg-red-100 text-red-800 border border-red-300',
-                high: 'bg-orange-100 text-orange-800 border border-orange-300',
-                medium: 'bg-yellow-100 text-yellow-800 border border-yellow-300',
-                low: 'bg-blue-100 text-blue-800 border border-blue-300'
-            };
-            return classes[severity] || classes.medium;
-        }
-
-        function getSeverityEmoji(severity) {
-            const emojis = {
-                critical: '🔴',
-                high: '🟠',
-                medium: '🟡',
-                low: '🔵'
-            };
-            return emojis[severity] || '⚪';
-        }
-
-        function formatTime(timestamp) {
-            const date = new Date(timestamp);
-            const now = new Date();
-            const diff = Math.floor((now - date) / 60000);
-            if (diff < 1) return 'Just now';
-            if (diff < 60) return `${diff}m ago`;
-            if (diff < 1440) return `${Math.floor(diff / 60)}h ago`;
-            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-        }
-
-        function switchTab(tab) {
-            currentTab = tab;
-            fetchData();
-        }
-
-        function toggleAutoRefresh() {
-            autoRefresh = !autoRefresh;
-            if (autoRefresh) {
-                refreshInterval = setInterval(fetchData, 10000);
-            } else {
-                clearInterval(refreshInterval);
-            }
-            fetchData();
-        }
-
-        function showIncidentDetails(id) {
-            alert('Incident details modal coming in Phase 2!\\n\\nIncident ID: ' + id + '\\n\\nFeatures:\\n- Full root cause analysis\\n- Recommended actions\\n- One-click remediation');
-        }
-
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', fetchData);
-        fetchData();
-    </script>
-</body>
-</html>
-    """
-    
 @app.get("/dashboard/phase2", response_class=HTMLResponse)
 async def get_phase2_dashboard():
-    """
-    Serve Phase 2 dashboard with enhanced features
-    """
+    """Serve Phase 2 dashboard"""
     try:
-        # Explicitly use UTF-8 encoding to handle emojis and special characters
         with open('dashboard_phase2.html', 'r', encoding='utf-8') as f:
             return f.read()
     except FileNotFoundError:
-        return """
-        <html>
-            <body style="font-family: sans-serif; padding: 40px; text-align: center;">
-                <h1>❌ Phase 2 Dashboard Not Found</h1>
-                <p>Please ensure <code>dashboard_phase2.html</code> exists in the project root.</p>
-                <p><a href="/dashboard">← Back to Phase 1 Dashboard</a></p>
-            </body>
-        </html>
-        """
-    except Exception as e:
-        return f"""
-        <html>
-            <body style="font-family: sans-serif; padding: 40px; text-align: center;">
-                <h1>❌ Error Loading Dashboard</h1>
-                <p>Error: {str(e)}</p>
-                <p><a href="/dashboard">← Back to Phase 1 Dashboard</a></p>
-            </body>
-        </html>
-        """
+        return """<html><body style="font-family: sans-serif; padding: 40px; text-align: center;">
+        <h1>❌ Phase 2 Dashboard Not Found</h1>
+        <p>Please ensure <code>dashboard_phase2.html</code> exists in the project root.</p>
+        <p><a href="/dashboard">← Back to Phase 1 Dashboard</a></p></body></html>"""
 
 if __name__ == "__main__":
     import uvicorn
