@@ -1,0 +1,31 @@
+{
+  "project_hash": "RHKN-95B0D9",
+  "snapshots": [
+    {
+      "id": "snapshot_20251230_102718",
+      "timestamp": "2025-12-30T10:27:18.479537Z",
+      "sequence": 1,
+      "endpoints": 44,
+      "api_calls": 22,
+      "connections": 20,
+      "files": 39,
+      "drift": 0.0,
+      "status": "baseline",
+      "report_file": "1"
+    },
+    {
+      "id": "snapshot_20251230_103005",
+      "timestamp": "2025-12-30T10:30:05.884873Z",
+      "sequence": 2,
+      "endpoints": 44,
+      "api_calls": 22,
+      "connections": 20,
+      "files": 42,
+      "drift": 0.0,
+      "status": "healthy",
+      "report_file": "2",
+      "compared_to": "snapshot_20251230_102718",
+      "compared_to_report": "1"
+    }
+  ]
+}

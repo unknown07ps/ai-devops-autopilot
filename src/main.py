@@ -1,9 +1,11 @@
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from datetime import datetime, timezone, timedelta
+from contextlib import asynccontextmanager
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 import redis
 import json
 from typing import List, Dict, Any, Optional
@@ -12,13 +14,56 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Import subscription components
+from src.api.subscription_api import router as subscription_router, check_access
+from src.notifications.email import send_expiry_reminder_email
+from src.scheduler.trial_jobs import check_trial_expirations, send_trial_reminders
+
+# Initialize Redis connection
+redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"))
+
+# Initialize scheduler
+scheduler = AsyncIOScheduler()
+
+# Define lifespan context manager for FastAPI
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    print("[SCHEDULER] Starting background jobs...")
+    
+    # Add scheduled jobs
+    scheduler.add_job(
+        check_trial_expirations,
+        CronTrigger(hour=0, minute=0),  # Midnight daily
+        id='check_expirations',
+        name='Check Trial Expirations'
+    )
+    
+    scheduler.add_job(
+        send_trial_reminders,
+        CronTrigger(hour=9, minute=0),  # 9 AM daily
+        id='send_reminders',
+        name='Send Trial Reminders'
+    )
+    
+    scheduler.start()
+    print(f"[SCHEDULER] ✓ Started {len(scheduler.get_jobs())} background jobs")
+    
+    yield
+    
+    # Shutdown
+    print("[SCHEDULER] Shutting down background jobs...")
+    scheduler.shutdown()
+
+# Create FastAPI app with lifespan
 app = FastAPI(
     title="AI DevOps Autopilot",
     version="0.3.0",
-    description="Autonomous incident detection, analysis, and response"
+    description="Autonomous incident detection, analysis, and response",
+    lifespan=lifespan
 )
 
-# CORS middleware for dashboard
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # In production, replace with specific origins
@@ -27,10 +72,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Redis connection for event streaming
-redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"))
+# Include routers
+app.include_router(subscription_router)
 
+# ============================================================================
 # Data Models
+# ============================================================================
+
 class MetricPoint(BaseModel):
     timestamp: datetime
     metric_name: str
@@ -73,16 +121,7 @@ AUTONOMOUS_ENABLED = False
 autonomous_executor = None
 
 try:
-    # Import Phase 3 components
-    import sys
-    from pathlib import Path
-    
-    # Ensure src directory is in path
-    src_path = Path(__file__).parent
-    if str(src_path) not in sys.path:
-        sys.path.insert(0, str(src_path))
-    
-    from autonomous_executor import AutonomousExecutor, ExecutionMode
+    from src.autonomous_executor import AutonomousExecutor, ExecutionMode
     
     # Simple action executor for Phase 3
     class SimpleActionExecutor:
@@ -144,7 +183,10 @@ except Exception as e:
     print(f"[INIT] ⚠️ Failed to initialize autonomous executor: {e}")
     print("[INIT] Phase 3 endpoints will return 503")
 
-# Health check
+# ============================================================================
+# Health Endpoints
+# ============================================================================
+
 @app.get("/")
 async def root():
     return {
@@ -478,34 +520,51 @@ async def get_config():
 # ============================================================================
 
 @app.get("/api/v3/autonomous/status")
-async def get_autonomous_status():
-    """Get current autonomous execution status"""
+async def get_autonomous_status(user_id: str):
+    """Get current autonomous execution status (subscription-gated)"""
     try:
+        # Check subscription first
+        access = await check_access(user_id, "autonomous_mode")
+
+        if not access["allowed"]:
+            return {
+                "autonomous_enabled": False,
+                "execution_mode": "manual",
+                "status": "restricted",
+                "message": "Autonomous mode requires an active subscription",
+                "reason": access.get("reason"),
+                "upgrade_url": "/subscription/upgrade"
+            }
+
+        # Check if autonomous executor is available
         if not AUTONOMOUS_ENABLED or not autonomous_executor:
             return {
                 "autonomous_enabled": False,
-                "message": "Autonomous mode not initialized",
                 "execution_mode": "manual",
+                "status": "not_initialized",
+                "message": "Autonomous mode not initialized",
                 "error": "Phase 3 components not loaded. Check autonomous_executor.py exists in src/"
             }
-        
+
+        # Get autonomous stats
         stats = autonomous_executor.get_autonomous_stats()
-        
+
         return {
             "autonomous_enabled": True,
-            "execution_mode": stats['execution_mode'],
-            "confidence_threshold": stats['confidence_threshold'],
-            "total_autonomous_actions": stats['total_autonomous_actions'],
-            "successful_actions": stats['successful_actions'],
-            "success_rate": stats['success_rate'],
-            "active_actions": stats['active_actions'],
-            "learning_weights": stats['learning_weights'],
-            "night_mode_active": stats.get('is_night_mode_active'),
+            "execution_mode": stats["execution_mode"],
+            "confidence_threshold": stats["confidence_threshold"],
+            "total_autonomous_actions": stats["total_autonomous_actions"],
+            "successful_actions": stats["successful_actions"],
+            "success_rate": stats["success_rate"],
+            "active_actions": stats["active_actions"],
+            "learning_weights": stats["learning_weights"],
+            "night_mode_active": stats.get("is_night_mode_active"),
             "status": "operational"
         }
+
     except Exception as e:
         print(f"[API ERROR] get_autonomous_status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch autonomous status")
 
 @app.post("/api/v3/autonomous/mode")
 async def set_autonomous_mode(update: AutonomousModeUpdate):
@@ -518,7 +577,7 @@ async def set_autonomous_mode(update: AutonomousModeUpdate):
             )
         
         # Validate mode
-        from autonomous_executor import ExecutionMode
+        from src.autonomous_executor import ExecutionMode
         valid_modes = {
             "manual": ExecutionMode.MANUAL,
             "supervised": ExecutionMode.SUPERVISED,
@@ -700,51 +759,34 @@ async def get_confidence_breakdown(action_id: str):
 @app.post("/api/v3/autonomous/adjust-weights")
 async def adjust_learning_weights(update: LearningWeightsUpdate):
     """Manually adjust learning weights (for experimentation)"""
-    # Log what we received
-    print(f"[DEBUG] adjust_weights called with: rule={update.rule_weight}, ai={update.ai_weight}, hist={update.historical_weight}")
-    
-    if not AUTONOMOUS_ENABLED or not autonomous_executor:
-        raise HTTPException(
-            status_code=503,
-            detail="Autonomous mode not available"
-        )
-    
-    # Validate ALL weights IMMEDIATELY before any processing
-    if update.rule_weight is not None:
-        print(f"[DEBUG] Validating rule_weight={update.rule_weight}, type={type(update.rule_weight)}")
-        if not isinstance(update.rule_weight, (int, float)):
-            raise HTTPException(status_code=400, detail="rule_weight must be a number")
-        if update.rule_weight < 0 or update.rule_weight > 1:
-            print(f"[DEBUG] rule_weight {update.rule_weight} is out of range, raising 400")
-            raise HTTPException(
-                status_code=400,
-                detail=f"Weights must be between 0 and 1. rule_weight={update.rule_weight} is invalid."
-            )
-    
-    if update.ai_weight is not None:
-        print(f"[DEBUG] Validating ai_weight={update.ai_weight}")
-        if not isinstance(update.ai_weight, (int, float)):
-            raise HTTPException(status_code=400, detail="ai_weight must be a number")
-        if update.ai_weight < 0 or update.ai_weight > 1:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Weights must be between 0 and 1. ai_weight={update.ai_weight} is invalid."
-            )
-    
-    if update.historical_weight is not None:
-        print(f"[DEBUG] Validating historical_weight={update.historical_weight}")
-        if not isinstance(update.historical_weight, (int, float)):
-            raise HTTPException(status_code=400, detail="historical_weight must be a number")
-        if update.historical_weight < 0 or update.historical_weight > 1:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Weights must be between 0 and 1. historical_weight={update.historical_weight} is invalid."
-            )
-    
-    print("[DEBUG] All validations passed, updating weights...")
-    
     try:
-        # Update weights only after ALL validations pass
+        if not AUTONOMOUS_ENABLED or not autonomous_executor:
+            raise HTTPException(
+                status_code=503,
+                detail="Autonomous mode not available"
+            )
+        
+        # Validate weights
+        weights_to_check = [
+            ('rule_weight', update.rule_weight),
+            ('ai_weight', update.ai_weight),
+            ('historical_weight', update.historical_weight)
+        ]
+        
+        for name, value in weights_to_check:
+            if value is not None:
+                if not isinstance(value, (int, float)):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{name} must be a number"
+                    )
+                if not 0 <= value <= 1:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Weights must be between 0 and 1. {name}={value} is invalid."
+                    )
+        
+        # Update weights
         if update.rule_weight is not None:
             autonomous_executor.rule_weight = update.rule_weight
         if update.ai_weight is not None:
@@ -757,12 +799,10 @@ async def adjust_learning_weights(update: LearningWeightsUpdate):
                 autonomous_executor.ai_weight + 
                 autonomous_executor.historical_weight)
         
-        if total > 0:  # Prevent division by zero
+        if total > 0:
             autonomous_executor.rule_weight /= total
             autonomous_executor.ai_weight /= total
             autonomous_executor.historical_weight /= total
-        
-        print(f"[DEBUG] Weights updated successfully")
         
         return {
             "status": "success",
@@ -1076,7 +1116,10 @@ async def get_services():
         print(f"[API ERROR] Failed to get services: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Background processing functions
+# ============================================================================
+# Background Processing Functions
+# ============================================================================
+
 async def check_for_anomalies(metrics: List[MetricPoint]):
     """Check metrics for anomalies"""
     print(f"[DETECTION] Checking {len(metrics)} metrics for anomalies...")
@@ -1089,11 +1132,13 @@ async def monitor_deployment(deployment: DeploymentEvent):
     """Monitor deployment health post-deploy"""
     print(f"[MONITOR] Tracking deployment {deployment.service}:{deployment.version}")
 
-# Dashboard routes
+# ============================================================================
+# Dashboard Routes
+# ============================================================================
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def get_dashboard():
     """Serve Phase 1 dashboard"""
-    # Return inline HTML or load from file
     return """<!DOCTYPE html>
 <html><body><h1>Dashboard - See dashboard_phase2.html for full version</h1></body></html>"""
 
@@ -1108,6 +1153,10 @@ async def get_phase2_dashboard():
         <h1>❌ Phase 2 Dashboard Not Found</h1>
         <p>Please ensure <code>dashboard_phase2.html</code> exists in the project root.</p>
         <p><a href="/dashboard">← Back to Phase 1 Dashboard</a></p></body></html>"""
+
+# ============================================================================
+# Run Application
+# ============================================================================
 
 if __name__ == "__main__":
     import uvicorn

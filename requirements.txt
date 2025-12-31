@@ -28,3 +28,7 @@ passlib[bcrypt]==1.7.4
 
 # Rate Limiting (optional)
 slowapi==0.1.9
+
+apscheduler==3.10.4
+httpx==0.25.2
+python-dotenv==1.0.0
