@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -6,10 +6,7 @@ from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from api.auth_api import router as auth_router
-from database import get_db
-from auth import get_current_user
-from models import User
+from sqlalchemy.orm import Session
 import redis
 import json
 from typing import List, Dict, Any, Optional
@@ -18,10 +15,21 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Import subscription components
+# Import database and authentication
+from database import get_db, init_db, engine, get_db_context
+from auth import get_current_user, get_current_active_subscription, cleanup_expired_sessions
+from models import User, Subscription
+
+# Import API routers
+from api.auth_api import router as auth_router
 from api.subscription_api import router as subscription_router, check_access
+from api.razorpay_api import router as razorpay_router
+from api.dashboard_api import router as dashboard_router
+
+# Import notification and scheduling components
 from notifications.email import send_expiry_reminder_email
 from scheduler.trial_jobs import check_trial_expirations, send_trial_reminders
+from subscription_service import check_all_expirations
 
 # Initialize Redis connection
 redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"))
@@ -29,94 +37,39 @@ redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"))
 # Initialize scheduler
 scheduler = AsyncIOScheduler()
 
-# Define lifespan context manager for FastAPI
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    print("[SCHEDULER] Starting background jobs...")
+# Validate critical environment variables
+def validate_environment():
+    """Validate that critical environment variables are set"""
+    errors = []
+    warnings = []
     
-    # Add scheduled jobs
-    scheduler.add_job(
-        check_trial_expirations,
-        CronTrigger(hour=0, minute=0),  # Midnight daily
-        id='check_expirations',
-        name='Check Trial Expirations'
-    )
+    # Database
+    if not os.getenv("DATABASE_URL"):
+        warnings.append("DATABASE_URL not set - using default PostgreSQL connection")
     
-    scheduler.add_job(
-        send_trial_reminders,
-        CronTrigger(hour=9, minute=0),  # 9 AM daily
-        id='send_reminders',
-        name='Send Trial Reminders'
-    )
+    # JWT Secret
+    if not os.getenv("JWT_SECRET_KEY"):
+        errors.append("JWT_SECRET_KEY not set - using generated secret (not persistent!)")
     
-    scheduler.start()
-    print(f"[SCHEDULER] ✓ Started {len(scheduler.get_jobs())} background jobs")
+    # Razorpay (optional but warn if not set)
+    if not os.getenv("RAZORPAY_KEY_ID") or not os.getenv("RAZORPAY_KEY_SECRET"):
+        warnings.append("Razorpay credentials not set - payment features will be disabled")
     
-    yield
+    # Slack (optional)
+    if not os.getenv("SLACK_WEBHOOK_URL"):
+        warnings.append("Slack webhook not configured - notifications disabled")
     
-    # Shutdown
-    print("[SCHEDULER] Shutting down background jobs...")
-    scheduler.shutdown()
-
-# Create FastAPI app with lifespan
-app = FastAPI(
-    title="AI DevOps Autopilot",
-    version="0.3.0",
-    description="Autonomous incident detection, analysis, and response",
-    lifespan=lifespan
-)
-
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Include routers
-app.include_router(subscription_router)
-app.include_router(auth_router)
-
-# ============================================================================
-# Data Models
-# ============================================================================
-
-class MetricPoint(BaseModel):
-    timestamp: datetime
-    metric_name: str
-    value: float
-    labels: Dict[str, str] = {}
-
-class LogEntry(BaseModel):
-    timestamp: datetime
-    level: str
-    message: str
-    service: str
-    labels: Dict[str, str] = {}
-
-class DeploymentEvent(BaseModel):
-    timestamp: datetime
-    service: str
-    version: str
-    status: str  # success, failed, in_progress
-    metadata: Dict[str, Any] = {}
-
-class ActionApproval(BaseModel):
-    action_id: str
-    approved_by: str
-    notes: Optional[str] = None
-
-class AutonomousModeUpdate(BaseModel):
-    mode: str
-    confidence_threshold: Optional[int] = None
-
-class LearningWeightsUpdate(BaseModel):
-    rule_weight: Optional[float] = None
-    ai_weight: Optional[float] = None
-    historical_weight: Optional[float] = None
+    if errors:
+        print("[VALIDATION ERRORS]")
+        for error in errors:
+            print(f"  ❌ {error}")
+    
+    if warnings:
+        print("[VALIDATION WARNINGS]")
+        for warning in warnings:
+            print(f"  ⚠️  {warning}")
+    
+    return len(errors) == 0
 
 # ============================================================================
 # Phase 3: Initialize Autonomous Executor
@@ -189,6 +142,182 @@ except Exception as e:
     print("[INIT] Phase 3 endpoints will return 503")
 
 # ============================================================================
+# Background Jobs
+# ============================================================================
+
+async def check_trial_expirations_job():
+    """Check and expire trials (runs daily at midnight)"""
+    try:
+        with get_db_context() as db:
+            result = check_all_expirations(db)
+            print(f"[SCHEDULER] Checked expirations: {result.get('expired_count', 0)} expired")
+    except Exception as e:
+        print(f"[SCHEDULER ERROR] Failed to check expirations: {e}")
+
+async def send_trial_reminders_job():
+    """Send trial expiry reminders (runs daily at 9 AM)"""
+    try:
+        await send_trial_reminders()
+        print(f"[SCHEDULER] Sent trial reminder emails")
+    except Exception as e:
+        print(f"[SCHEDULER ERROR] Failed to send reminders: {e}")
+
+async def cleanup_expired_sessions_job():
+    """Cleanup expired sessions (runs every 6 hours)"""
+    try:
+        with get_db_context() as db:
+            cleanup_expired_sessions(db)
+            print(f"[SCHEDULER] Cleaned up expired sessions")
+    except Exception as e:
+        print(f"[SCHEDULER ERROR] Failed to cleanup sessions: {e}")
+
+# Define lifespan context manager for FastAPI
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    print("\n" + "="*60)
+    print("🚀 AI DevOps Autopilot - Startup Sequence")
+    print("="*60)
+    
+    # Validate environment
+    if not validate_environment():
+        print("[STARTUP] ⚠️ Environment validation failed - some features may not work")
+    
+    # Initialize database
+    try:
+        print("[DATABASE] Testing database connection...")
+        with engine.connect() as conn:
+            conn.execute("SELECT 1")
+        print("[DATABASE] ✓ Connected to PostgreSQL")
+        
+        # Create tables if they don't exist
+        print("[DATABASE] Ensuring tables exist...")
+        init_db()
+        print("[DATABASE] ✓ Database initialized")
+        
+    except Exception as e:
+        print(f"[DATABASE] ❌ Database initialization failed: {e}")
+        print("[DATABASE] ⚠️ API will continue but database features may not work")
+    
+    # Test Redis connection
+    try:
+        redis_client.ping()
+        print("[REDIS] ✓ Connected")
+    except Exception as e:
+        print(f"[REDIS] ❌ Redis connection failed: {e}")
+        raise Exception("Redis is required for the application to run")
+    
+    # Start background jobs
+    print("[SCHEDULER] Starting background jobs...")
+    
+    # Add scheduled jobs
+    scheduler.add_job(
+        check_trial_expirations_job,
+        CronTrigger(hour=0, minute=0),  # Midnight daily
+        id='check_expirations',
+        name='Check Trial Expirations'
+    )
+    
+    scheduler.add_job(
+        send_trial_reminders_job,
+        CronTrigger(hour=9, minute=0),  # 9 AM daily
+        id='send_reminders',
+        name='Send Trial Reminders'
+    )
+    
+    scheduler.add_job(
+        cleanup_expired_sessions_job,
+        CronTrigger(hour='*/6', minute=0),  # Every 6 hours
+        id='cleanup_sessions',
+        name='Cleanup Expired Sessions'
+    )
+    
+    scheduler.start()
+    print(f"[SCHEDULER] ✓ Started {len(scheduler.get_jobs())} background jobs")
+    
+    # Print startup summary
+    print("\n" + "="*60)
+    print("📊 System Status")
+    print("="*60)
+    print(f"Database: {'✓ Connected' if engine else '✗ Failed'}")
+    print(f"Redis: ✓ Connected")
+    print(f"Auth: {'✓ Enabled' if os.getenv('JWT_SECRET_KEY') else '⚠️ Using temporary secret'}")
+    print(f"Payments: {'✓ Razorpay' if os.getenv('RAZORPAY_KEY_ID') else '✗ Disabled'}")
+    print(f"Autonomous Mode: {'✓ Enabled' if AUTONOMOUS_ENABLED else '✗ Disabled'}")
+    print(f"Background Jobs: ✓ {len(scheduler.get_jobs())} scheduled")
+    print("="*60)
+    print("✅ System Ready - Listening on http://0.0.0.0:8000")
+    print("="*60 + "\n")
+    
+    yield
+    
+    # Shutdown
+    print("\n[SHUTDOWN] Shutting down background jobs...")
+    scheduler.shutdown()
+    print("[SHUTDOWN] ✓ Graceful shutdown complete")
+
+# Create FastAPI app with lifespan
+app = FastAPI(
+    title="AI DevOps Autopilot",
+    version="0.3.0",
+    description="Autonomous incident detection, analysis, and response with subscription management",
+    lifespan=lifespan
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(auth_router)
+app.include_router(subscription_router)
+app.include_router(razorpay_router)
+app.include_router(dashboard_router)
+
+# ============================================================================
+# Data Models
+# ============================================================================
+
+class MetricPoint(BaseModel):
+    timestamp: datetime
+    metric_name: str
+    value: float
+    labels: Dict[str, str] = {}
+
+class LogEntry(BaseModel):
+    timestamp: datetime
+    level: str
+    message: str
+    service: str
+    labels: Dict[str, str] = {}
+
+class DeploymentEvent(BaseModel):
+    timestamp: datetime
+    service: str
+    version: str
+    status: str  # success, failed, in_progress
+    metadata: Dict[str, Any] = {}
+
+class ActionApproval(BaseModel):
+    action_id: str
+    approved_by: str
+    notes: Optional[str] = None
+
+class AutonomousModeUpdate(BaseModel):
+    mode: str
+    confidence_threshold: Optional[int] = None
+
+class LearningWeightsUpdate(BaseModel):
+    rule_weight: Optional[float] = None
+    ai_weight: Optional[float] = None
+    historical_weight: Optional[float] = None
+
+# ============================================================================
 # Health Endpoints
 # ============================================================================
 
@@ -203,6 +332,9 @@ async def root():
             "AI-powered root cause analysis",
             "Action approval workflow",
             "Autonomous execution (Phase 3)",
+            "User authentication & authorization",
+            "Subscription management",
+            "Payment processing (Razorpay)",
             "Slack notifications",
             "Web dashboard"
         ]
@@ -210,19 +342,126 @@ async def root():
 
 @app.get("/health")
 async def health():
+    """Comprehensive health check"""
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "components": {}
+    }
+    
+    # Check Redis
     try:
         redis_client.ping()
+        health_status["components"]["redis"] = "healthy"
+    except Exception as e:
+        health_status["components"]["redis"] = f"unhealthy: {str(e)}"
+        health_status["status"] = "degraded"
+    
+    # Check Database
+    try:
+        with engine.connect() as conn:
+            conn.execute("SELECT 1")
+        health_status["components"]["database"] = "healthy"
+    except Exception as e:
+        health_status["components"]["database"] = f"unhealthy: {str(e)}"
+        health_status["status"] = "degraded"
+    
+    # Check Authentication
+    health_status["components"]["authentication"] = "healthy" if os.getenv("JWT_SECRET_KEY") else "warning: using temporary secret"
+    
+    # Check Payment Gateway
+    razorpay_configured = bool(os.getenv("RAZORPAY_KEY_ID") and os.getenv("RAZORPAY_KEY_SECRET"))
+    health_status["components"]["payment_gateway"] = "healthy" if razorpay_configured else "disabled"
+    
+    # Check Autonomous Mode
+    health_status["components"]["autonomous_mode"] = "healthy" if AUTONOMOUS_ENABLED else "disabled"
+    
+    return health_status
+
+@app.get("/health/database")
+async def health_database(db: Session = Depends(get_db)):
+    """Detailed database health check"""
+    try:
+        # Check connection
+        db.execute("SELECT 1")
+        
+        # Count users and subscriptions
+        user_count = db.query(User).count()
+        subscription_count = db.query(Subscription).count()
+        
         return {
             "status": "healthy",
-            "redis": "connected",
-            "autonomous_mode": AUTONOMOUS_ENABLED
+            "connection": "active",
+            "statistics": {
+                "users": user_count,
+                "subscriptions": subscription_count
+            }
         }
-    except:
+    except Exception as e:
         return {
-            "status": "degraded",
-            "redis": "disconnected",
-            "autonomous_mode": False
+            "status": "unhealthy",
+            "error": str(e)
         }
+
+@app.get("/health/auth")
+async def health_auth():
+    """Authentication system health check"""
+    return {
+        "status": "healthy",
+        "jwt_configured": bool(os.getenv("JWT_SECRET_KEY")),
+        "session_cleanup_scheduled": scheduler.get_job('cleanup_sessions') is not None
+    }
+
+@app.get("/health/payments")
+async def health_payments():
+    """Payment gateway health check"""
+    razorpay_configured = bool(
+        os.getenv("RAZORPAY_KEY_ID") and 
+        os.getenv("RAZORPAY_KEY_SECRET")
+    )
+    
+    return {
+        "status": "healthy" if razorpay_configured else "disabled",
+        "provider": "razorpay",
+        "configured": razorpay_configured,
+        "webhook_secret_set": bool(os.getenv("RAZORPAY_WEBHOOK_SECRET"))
+    }
+
+# ============================================================================
+# Protected Endpoints Example
+# ============================================================================
+
+@app.get("/api/user/profile")
+async def get_user_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get current user profile with subscription"""
+    # Get subscription
+    subscription = db.query(Subscription).filter(
+        Subscription.user_id == current_user.user_id
+    ).first()
+    
+    return {
+        "user": {
+            "user_id": current_user.user_id,
+            "email": current_user.email,
+            "full_name": current_user.full_name,
+            "company": current_user.company,
+            "email_verified": current_user.email_verified,
+            "created_at": current_user.created_at.isoformat()
+        },
+        "subscription": {
+            "plan": subscription.plan.value if subscription else None,
+            "status": subscription.status.value if subscription else None,
+            "days_remaining": subscription.days_until_expiry() if subscription else 0,
+            "features": {
+                "autonomous_mode": subscription.plan.value in ["pro", "enterprise"] if subscription else False,
+                "max_services": 5 if not subscription else (10 if subscription.plan.value == "pro" else 999),
+                "advanced_analytics": subscription.plan.value in ["pro", "enterprise"] if subscription else False
+            }
+        } if subscription else None
+    }
 
 # ============================================================================
 # INGESTION ENDPOINTS
@@ -521,26 +760,71 @@ async def get_config():
     }
 
 # ============================================================================
-# PHASE 3 API ENDPOINTS
+# PHASE 3 API ENDPOINTS - SUBSCRIPTION GATED
 # ============================================================================
 
-from auth import get_current_active_subscription
-from models import Subscription
-
-# Use in endpoints:
 @app.get("/api/v3/autonomous/status")
 async def get_autonomous_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get autonomous execution status (requires authentication)"""
+    try:
+        # Get user subscription
+        subscription = db.query(Subscription).filter(
+            Subscription.user_id == current_user.user_id
+        ).first()
+        
+        # Check if autonomous mode is available
+        has_access = subscription and subscription.plan.value in ["pro", "enterprise"]
+        
+        if not AUTONOMOUS_ENABLED:
+            return {
+                "autonomous_enabled": False,
+                "message": "Autonomous mode not available - check that autonomous_executor.py exists",
+                "user_has_access": has_access,
+                "user_plan": subscription.plan.value if subscription else None
+            }
+        
+        # Get stats from Redis
+        outcomes_data = redis_client.lrange('autonomous_outcomes', 0, 99)
+        outcomes = [json.loads(o) for o in outcomes_data]
+        
+        total = len(outcomes)
+        successes = sum(1 for o in outcomes if o.get('success'))
+        success_rate = (successes / total * 100) if total > 0 else 0
+        
+        return {
+            "autonomous_enabled": True,
+            "user_has_access": has_access,
+            "user_plan": subscription.plan.value if subscription else None,
+            "execution_mode": autonomous_executor.execution_mode.value,
+            "confidence_threshold": autonomous_executor.confidence_threshold,
+            "learning_weights": {
+                "rule_based": round(autonomous_executor.rule_weight, 3),
+                "ai": round(autonomous_executor.ai_weight, 3),
+                "historical": round(autonomous_executor.historical_weight, 3)
+            },
+            "total_autonomous_actions": total,
+            "successful_actions": successes,
+            "success_rate": round(success_rate, 1),
+            "active_actions": len(autonomous_executor.active_actions)
+        }
+    except Exception as e:
+        print(f"[API ERROR] get_autonomous_status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v3/autonomous/mode")
+async def set_autonomous_mode(
+    update: AutonomousModeUpdate,
     current_user: User = Depends(get_current_user),
     subscription: Subscription = Depends(get_current_active_subscription),
     db: Session = Depends(get_db)
 ):
-    
-@app.post("/api/v3/autonomous/mode")
-async def set_autonomous_mode(update: AutonomousModeUpdate, user_id: str):
     """Change autonomous execution mode (subscription-gated)"""
     try:
         # Check subscription access
-        access = await check_access(user_id, "autonomous_mode")
+        access = await check_access(current_user.user_id, "autonomous_mode")
         
         if not access["allowed"]:
             raise HTTPException(
@@ -548,7 +832,8 @@ async def set_autonomous_mode(update: AutonomousModeUpdate, user_id: str):
                 detail={
                     "error": "Autonomous mode requires Pro or Enterprise plan",
                     "reason": access.get("reason"),
-                    "upgrade_url": f"/api/subscription/create-checkout-session?user_id={user_id}"
+                    "current_plan": subscription.plan.value if subscription else "free_trial",
+                    "upgrade_url": f"/api/subscription/create-checkout-session?user_id={current_user.user_id}"
                 }
             )
         
@@ -559,7 +844,6 @@ async def set_autonomous_mode(update: AutonomousModeUpdate, user_id: str):
             )
         
         # Validate mode
-        from src.autonomous_executor import ExecutionMode
         valid_modes = {
             "manual": ExecutionMode.MANUAL,
             "supervised": ExecutionMode.SUPERVISED,
@@ -591,7 +875,7 @@ async def set_autonomous_mode(update: AutonomousModeUpdate, user_id: str):
             "confidence_threshold": autonomous_executor.confidence_threshold,
             "message": f"Autonomous mode changed to {update.mode}",
             "timestamp": datetime.utcnow().isoformat(),
-            "plan": access.get("plan")
+            "plan": subscription.plan.value
         }
     except HTTPException:
         raise
@@ -600,7 +884,11 @@ async def set_autonomous_mode(update: AutonomousModeUpdate, user_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v3/autonomous/outcomes")
-async def get_autonomous_outcomes(limit: int = 50, success_only: bool = False):
+async def get_autonomous_outcomes(
+    limit: int = 50,
+    success_only: bool = False,
+    current_user: User = Depends(get_current_user)
+):
     """Get autonomous action outcomes for learning analysis"""
     try:
         outcomes_data = redis_client.lrange('autonomous_outcomes', 0, limit - 1)
@@ -657,7 +945,7 @@ async def get_autonomous_outcomes(limit: int = 50, success_only: bool = False):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v3/autonomous/safety-status")
-async def get_safety_status():
+async def get_safety_status(current_user: User = Depends(get_current_user)):
     """Get current safety rail status and limits"""
     try:
         if not AUTONOMOUS_ENABLED or not autonomous_executor:
@@ -704,7 +992,10 @@ async def get_safety_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v3/autonomous/confidence-breakdown/{action_id}")
-async def get_confidence_breakdown(action_id: str):
+async def get_confidence_breakdown(
+    action_id: str,
+    current_user: User = Depends(get_current_user)
+):
     """Get detailed confidence breakdown for an action"""
     try:
         action_data = redis_client.get(f"action:{action_id}")
@@ -740,9 +1031,20 @@ async def get_confidence_breakdown(action_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v3/autonomous/adjust-weights")
-async def adjust_learning_weights(update: LearningWeightsUpdate):
-    """Manually adjust learning weights (for experimentation)"""
+async def adjust_learning_weights(
+    update: LearningWeightsUpdate,
+    current_user: User = Depends(get_current_user),
+    subscription: Subscription = Depends(get_current_active_subscription)
+):
+    """Manually adjust learning weights (for experimentation) - Enterprise only"""
     try:
+        # Check for Enterprise subscription
+        if subscription.plan.value != "enterprise":
+            raise HTTPException(
+                status_code=403,
+                detail="Learning weight adjustment is only available on Enterprise plan"
+            )
+        
         if not AUTONOMOUS_ENABLED or not autonomous_executor:
             raise HTTPException(
                 status_code=503,
@@ -806,7 +1108,8 @@ async def adjust_learning_weights(update: LearningWeightsUpdate):
 async def get_autonomous_action_history(
     limit: int = 50,
     action_type: Optional[str] = None,
-    success_only: bool = False
+    success_only: bool = False,
+    current_user: User = Depends(get_current_user)
 ):
     """Get history of autonomous actions with filtering"""
     try:
@@ -866,32 +1169,6 @@ async def get_autonomous_action_history(
 # ============================================================================
 # DASHBOARD API ENDPOINTS
 # ============================================================================
-@app.get("/dashboard/phase2", response_class=HTMLResponse)
-async def get_phase2_dashboard(user_id: Optional[str] = None):
-    """Serve Phase 2 dashboard with subscription check"""
-    try:
-        # Optional: Check subscription status
-        subscription_status = None
-        if user_id:
-            sub_data = redis_client.get(f"subscription:{user_id}")
-            if sub_data:
-                subscription_status = json.loads(sub_data)
-        
-        with open('dashboard_phase2.html', 'r', encoding='utf-8') as f:
-            html_content = f.read()
-        
-        # Inject subscription status if needed
-        if subscription_status:
-            # You can add subscription info to the HTML here
-            pass
-        
-        return html_content
-    except FileNotFoundError:
-        return """<html><body style="font-family: sans-serif; padding: 40px; text-align: center;">
-        <h1>❌ Phase 2 Dashboard Not Found</h1>
-        <p>Please ensure <code>dashboard_phase2.html</code> exists in the project root.</p>
-        <p><a href="/dashboard">← Back to Phase 1 Dashboard</a></p></body></html>"""
-
 
 @app.get("/api/stats")
 async def get_dashboard_stats():
@@ -1147,21 +1424,38 @@ async def monitor_deployment(deployment: DeploymentEvent):
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def get_dashboard():
-    """Serve Phase 1 dashboard"""
-    return """<!DOCTYPE html>
-<html><body><h1>Dashboard - See dashboard_phase2.html for full version</h1></body></html>"""
+    """Serve main dashboard"""
+    try:
+        with open('Deployr_dashboard.html', 'r', encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        return """
+        <html><body style="font-family: sans-serif; padding: 40px; text-align: center;">
+        <h1>❌ Dashboard Not Found</h1>
+        <p>Please ensure <code>Deployr_dashboard.html</code> exists in the project root.</p>
+        </body></html>
+        """
 
 @app.get("/dashboard/phase2", response_class=HTMLResponse)
-async def get_phase2_dashboard():
-    """Serve Phase 2 dashboard"""
+async def get_phase2_dashboard(user_id: Optional[str] = None):
+    """Serve Phase 2 dashboard with subscription check"""
     try:
+        # Optional: Check subscription status
+        subscription_status = None
+        if user_id:
+            sub_data = redis_client.get(f"subscription:{user_id}")
+            if sub_data:
+                subscription_status = json.loads(sub_data)
+        
         with open('dashboard_phase2.html', 'r', encoding='utf-8') as f:
-            return f.read()
+            html_content = f.read()
+        
+        return html_content
     except FileNotFoundError:
         return """<html><body style="font-family: sans-serif; padding: 40px; text-align: center;">
         <h1>❌ Phase 2 Dashboard Not Found</h1>
         <p>Please ensure <code>dashboard_phase2.html</code> exists in the project root.</p>
-        <p><a href="/dashboard">← Back to Phase 1 Dashboard</a></p></body></html>"""
+        <p><a href="/dashboard">← Back to Main Dashboard</a></p></body></html>"""
 
 # ============================================================================
 # Run Application

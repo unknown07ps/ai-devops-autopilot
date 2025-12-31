@@ -14,7 +14,6 @@ import stripe
 from fastapi import Depends, Header
 
 
-
 router = APIRouter(prefix="/api/subscription", tags=["subscription"])
 
 # Redis connection
@@ -113,11 +112,15 @@ async def verify_subscription(
     
     return subscription  
   
-async def check_access(user_id: str, feature: str) -> Dict:
-    """
-    Check if user has access to a specific feature
-    Returns: {"allowed": bool, "reason": str, "upgrade_required": bool}
-    """
+async def check_access(user_id: str, db: Session) -> Dict:
+    """Check if user has access to a specific feature"""
+    subscription = db.query(Subscription).filter(
+        Subscription.user_id == user_id
+    ).first()
+    
+    if not subscription:
+        return {"allowed": False, "reason": "No subscription found"}
+    
     try:
         # Get user subscription
         sub_data = redis_client.get(f"subscription:{user_id}")
