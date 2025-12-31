@@ -15,9 +15,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import subscription components
-from src.api.subscription_api import router as subscription_router, check_access
-from src.notifications.email import send_expiry_reminder_email
-from src.scheduler.trial_jobs import check_trial_expirations, send_trial_reminders
+from api.subscription_api import router as subscription_router, check_access
+from notifications.email import send_expiry_reminder_email
+from scheduler.trial_jobs import check_trial_expirations, send_trial_reminders
 
 # Initialize Redis connection
 redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"))
@@ -121,7 +121,7 @@ AUTONOMOUS_ENABLED = False
 autonomous_executor = None
 
 try:
-    from src.autonomous_executor import AutonomousExecutor, ExecutionMode
+    from autonomous_executor import AutonomousExecutor, ExecutionMode
     
     # Simple action executor for Phase 3
     class SimpleActionExecutor:
@@ -533,7 +533,10 @@ async def get_autonomous_status(user_id: str):
                 "status": "restricted",
                 "message": "Autonomous mode requires an active subscription",
                 "reason": access.get("reason"),
-                "upgrade_url": "/subscription/upgrade"
+                "plan": access.get("plan"),
+                "upgrade_required": access.get("upgrade_required", True),
+                "available_in": access.get("available_in", ["pro", "enterprise"]),
+                "upgrade_url": "/api/subscription/create-checkout-session?user_id=" + user_id
             }
 
         # Check if autonomous executor is available
@@ -543,7 +546,8 @@ async def get_autonomous_status(user_id: str):
                 "execution_mode": "manual",
                 "status": "not_initialized",
                 "message": "Autonomous mode not initialized",
-                "error": "Phase 3 components not loaded. Check autonomous_executor.py exists in src/"
+                "error": "Phase 3 components not loaded. Check autonomous_executor.py exists in src/",
+                "plan": access.get("plan")
             }
 
         # Get autonomous stats
@@ -559,17 +563,32 @@ async def get_autonomous_status(user_id: str):
             "active_actions": stats["active_actions"],
             "learning_weights": stats["learning_weights"],
             "night_mode_active": stats.get("is_night_mode_active"),
-            "status": "operational"
+            "status": "operational",
+            "plan": access.get("plan"),
+            "subscription_status": "active"
         }
 
     except Exception as e:
         print(f"[API ERROR] get_autonomous_status: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch autonomous status")
-
+    
 @app.post("/api/v3/autonomous/mode")
-async def set_autonomous_mode(update: AutonomousModeUpdate):
-    """Change autonomous execution mode"""
+async def set_autonomous_mode(update: AutonomousModeUpdate, user_id: str):
+    """Change autonomous execution mode (subscription-gated)"""
     try:
+        # Check subscription access
+        access = await check_access(user_id, "autonomous_mode")
+        
+        if not access["allowed"]:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "Autonomous mode requires Pro or Enterprise plan",
+                    "reason": access.get("reason"),
+                    "upgrade_url": f"/api/subscription/create-checkout-session?user_id={user_id}"
+                }
+            )
+        
         if not AUTONOMOUS_ENABLED or not autonomous_executor:
             raise HTTPException(
                 status_code=503,
@@ -608,7 +627,8 @@ async def set_autonomous_mode(update: AutonomousModeUpdate):
             "mode": update.mode,
             "confidence_threshold": autonomous_executor.confidence_threshold,
             "message": f"Autonomous mode changed to {update.mode}",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
+            "plan": access.get("plan")
         }
     except HTTPException:
         raise
@@ -883,6 +903,32 @@ async def get_autonomous_action_history(
 # ============================================================================
 # DASHBOARD API ENDPOINTS
 # ============================================================================
+@app.get("/dashboard/phase2", response_class=HTMLResponse)
+async def get_phase2_dashboard(user_id: Optional[str] = None):
+    """Serve Phase 2 dashboard with subscription check"""
+    try:
+        # Optional: Check subscription status
+        subscription_status = None
+        if user_id:
+            sub_data = redis_client.get(f"subscription:{user_id}")
+            if sub_data:
+                subscription_status = json.loads(sub_data)
+        
+        with open('dashboard_phase2.html', 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        
+        # Inject subscription status if needed
+        if subscription_status:
+            # You can add subscription info to the HTML here
+            pass
+        
+        return html_content
+    except FileNotFoundError:
+        return """<html><body style="font-family: sans-serif; padding: 40px; text-align: center;">
+        <h1>❌ Phase 2 Dashboard Not Found</h1>
+        <p>Please ensure <code>dashboard_phase2.html</code> exists in the project root.</p>
+        <p><a href="/dashboard">← Back to Phase 1 Dashboard</a></p></body></html>"""
+
 
 @app.get("/api/stats")
 async def get_dashboard_stats():

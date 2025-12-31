@@ -99,17 +99,107 @@
             background-color: rgba(0, 188, 212, 0.2);
             border-bottom: 2px solid var(--primary);
         }
+
+        /* Subscription overlay */
+        .subscription-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(8px);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .locked-feature {
+            opacity: 0.5;
+            pointer-events: none;
+            position: relative;
+        }
+
+        .locked-feature::after {
+            content: '🔒';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2rem;
+        }
     </style>
 </head>
 
 <body>
     <div id="app"></div>
 
+    <!-- Subscription Upgrade Modal -->
+    <div id="upgradeModal" style="display: none;" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-6">
+        <div class="card rounded-xl max-w-md w-full p-8 shadow-2xl">
+            <div class="text-center mb-6">
+                <i class="fas fa-crown text-6xl mb-4" style="color: var(--primary);"></i>
+                <h2 class="text-3xl font-bold mb-2">Upgrade to Pro</h2>
+                <p class="text-gray-400">Continue monitoring with full access</p>
+            </div>
+
+            <div class="bg-black bg-opacity-50 rounded-lg p-6 mb-6 border border-primary">
+                <div class="text-center mb-4">
+                    <div class="text-5xl font-bold mb-2">$99</div>
+                    <div class="text-gray-400">per month</div>
+                </div>
+                
+                <div class="space-y-3 text-sm">
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-check text-green-500"></i>
+                        <span>AI-powered anomaly detection</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-check text-green-500"></i>
+                        <span>Autonomous remediation</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-check text-green-500"></i>
+                        <span>Root cause analysis</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-check text-green-500"></i>
+                        <span>24/7 Slack alerts</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-check text-green-500"></i>
+                        <span>Learning & pattern recognition</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-check text-green-500"></i>
+                        <span>Unlimited monitored services</span>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="handleUpgrade()" class="w-full bg-primary hover:bg-primary-dark text-black py-4 rounded-lg font-bold text-lg mb-3 transition">
+                <i class="fas fa-credit-card mr-2"></i>Upgrade Now
+            </button>
+            
+            <button onclick="closeUpgradeModal()" class="w-full bg-gray-700 hover:bg-gray-600 py-3 rounded-lg font-semibold transition">
+                Maybe Later
+            </button>
+
+            <p class="text-xs text-gray-500 text-center mt-4">
+                Cancel anytime. No hidden fees.
+            </p>
+        </div>
+    </div>
+
     <script>
         const API_BASE = 'http://localhost:8000';
+        const CURRENT_USER_ID = 'demo_user_123'; // Replace with actual auth
+        
         let currentView = 'control-center';
         let autoRefresh = false;
         let refreshInterval = null;
+        let subscription = null;
 
         let state = {
             stats: null,
@@ -126,6 +216,180 @@
             selectedIncident: null,
             selectedAction: null
         };
+
+        // ============================================================================
+        // SUBSCRIPTION MANAGEMENT
+        // ============================================================================
+        
+        async function initializeSubscription() {
+            try {
+                // Try to get from API
+                const response = await fetch(`${API_BASE}/api/subscription/status/${CURRENT_USER_ID}`);
+                
+                if (response.ok) {
+                    subscription = await response.json();
+                } else {
+                    // Create trial if doesn't exist
+                    const signupRes = await fetch(`${API_BASE}/api/subscription/signup`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            user_id: CURRENT_USER_ID,
+                            email: 'demo@deployr.com'
+                        })
+                    });
+                    
+                    if (signupRes.ok) {
+                        subscription = await signupRes.json();
+                    } else {
+                        // Fallback to localStorage
+                        subscription = getLocalSubscription();
+                    }
+                }
+                
+                // Check expiration
+                checkSubscriptionExpiration();
+                
+            } catch (error) {
+                console.error('Subscription init error:', error);
+                subscription = getLocalSubscription();
+            }
+        }
+
+        function getLocalSubscription() {
+            let sub = localStorage.getItem('deployr_subscription');
+            
+            if (!sub) {
+                const now = new Date();
+                const trialEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                
+                sub = {
+                    user_id: CURRENT_USER_ID,
+                    plan: 'pro',
+                    status: 'trialing',
+                    trial_start: now.toISOString(),
+                    trial_end: trialEnd.toISOString(),
+                    current_period_end: trialEnd.toISOString(),
+                    created_at: now.toISOString()
+                };
+                
+                localStorage.setItem('deployr_subscription', JSON.stringify(sub));
+            } else {
+                sub = JSON.parse(sub);
+            }
+            
+            return sub;
+        }
+
+        function checkSubscriptionExpiration() {
+            if (subscription.status === 'trialing') {
+                const now = new Date();
+                const trialEnd = new Date(subscription.trial_end);
+                
+                if (now > trialEnd) {
+                    subscription.status = 'expired';
+                    localStorage.setItem('deployr_subscription', JSON.stringify(subscription));
+                }
+            }
+        }
+
+        function getDaysRemaining() {
+            if (!subscription || subscription.status !== 'trialing') return 0;
+            
+            const now = new Date();
+            const trialEnd = new Date(subscription.trial_end);
+            const diffTime = trialEnd - now;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            return Math.max(0, diffDays);
+        }
+
+        function isFeatureAllowed(feature) {
+            if (!subscription) return false;
+            
+            const allowedFeatures = {
+                'dashboard_view': ['trialing', 'active', 'expired', 'canceled'],
+                'incidents_read': ['trialing', 'active', 'expired', 'canceled'],
+                'auto_remediation': ['trialing', 'active'],
+                'ai_reasoning': ['trialing', 'active'],
+                'slack_alerts': ['trialing', 'active'],
+                'autonomous_mode': ['trialing', 'active']
+            };
+            
+            return allowedFeatures[feature]?.includes(subscription.status) || false;
+        }
+
+        function showUpgradeModal() {
+            document.getElementById('upgradeModal').style.display = 'flex';
+        }
+
+        function closeUpgradeModal() {
+            document.getElementById('upgradeModal').style.display = 'none';
+        }
+
+        async function handleUpgrade() {
+            try {
+                // Simulate payment (integrate Stripe here)
+                const response = await fetch(`${API_BASE}/api/subscription/upgrade`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: CURRENT_USER_ID,
+                        payment_provider_customer_id: 'cus_demo123',
+                        payment_method_id: 'pm_demo123'
+                    })
+                });
+                
+                if (response.ok) {
+                    subscription = await response.json();
+                    localStorage.setItem('deployr_subscription', JSON.stringify(subscription));
+                    closeUpgradeModal();
+                    
+                    // Show success message
+                    showNotification('🎉 Welcome to Deployr Pro!', 'success');
+                    
+                    // Refresh page to enable features
+                    setTimeout(() => render(), 500);
+                } else {
+                    showNotification('Upgrade failed. Please try again.', 'error');
+                }
+            } catch (error) {
+                // Fallback for demo
+                const now = new Date();
+                const nextBilling = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+                
+                subscription.status = 'active';
+                subscription.current_period_end = nextBilling.toISOString();
+                localStorage.setItem('deployr_subscription', JSON.stringify(subscription));
+                
+                closeUpgradeModal();
+                showNotification('🎉 Upgraded to Pro! (Demo mode)', 'success');
+                setTimeout(() => render(), 500);
+            }
+        }
+
+        function showNotification(message, type) {
+            const notif = document.createElement('div');
+            notif.className = `fixed top-6 right-6 z-50 p-4 rounded-lg shadow-2xl slide-in ${
+                type === 'success' ? 'bg-green-600' : 'bg-red-600'
+            }`;
+            notif.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} text-2xl"></i>
+                    <span class="font-semibold">${message}</span>
+                </div>
+            `;
+            
+            document.body.appendChild(notif);
+            
+            setTimeout(() => {
+                notif.remove();
+            }, 3000);
+        }
+
+        // ============================================================================
+        // EXISTING DASHBOARD CODE (WITH SUBSCRIPTION CHECKS)
+        // ============================================================================
 
         async function fetchAllData() {
             try {
@@ -196,16 +460,7 @@
                             <div class="bg-red-900/20 border border-red-600/50 rounded-lg p-4 mb-6">
                                 <p class="text-sm text-red-300">${message}</p>
                             </div>
-                            <div class="bg-blue-900/20 border border-primary/50 rounded-lg p-6 mb-6 text-left">
-                                <p class="font-semibold mb-3">Quick Start:</p>
-                                <ol class="space-y-2 text-sm text-gray-300">
-                                    <li><i class="fas fa-terminal text-primary mr-2"></i>uvicorn src.main:app --reload</li>
-                                    <li><i class="fas fa-terminal text-primary mr-2"></i>python src/worker_phase3.py</li>
-                                    <li><i class="fas fa-terminal text-primary mr-2"></i>python test_phase2.py</li>
-                                    <li><i class="fas fa-sync text-primary mr-2"></i>Refresh this page</li>
-                                </ol>
-                            </div>
-                            <button onclick="fetchAllData()" class="bg-primary hover:bg-primary-dark px-6 py-3 rounded-lg font-semibold transition text-black">
+                            <button onclick="location.reload()" class="bg-primary hover:bg-primary-dark px-6 py-3 rounded-lg font-semibold transition text-black">
                                 <i class="fas fa-redo mr-2"></i>Retry Connection
                             </button>
                         </div>
@@ -229,10 +484,71 @@
 
             const app = document.getElementById('app');
             app.innerHTML = `
+                ${renderSubscriptionBanner()}
                 ${renderHeader()}
                 ${renderMainContent()}
                 ${renderNotifications()}
             `;
+        }
+
+        function renderSubscriptionBanner() {
+            if (!subscription) return '';
+            
+            const daysRemaining = getDaysRemaining();
+            
+            // Trial active
+            if (subscription.status === 'trialing') {
+                return `
+                    <div class="bg-gradient-to-r from-cyan-600 to-blue-600 p-4 text-center">
+                        <div class="max-w-7xl mx-auto flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-clock text-2xl"></i>
+                                <span class="font-bold text-lg">
+                                    ⏳ ${daysRemaining} ${daysRemaining === 1 ? 'Day' : 'Days'} Left in Free Trial
+                                </span>
+                            </div>
+                            <button onclick="showUpgradeModal()" class="bg-white text-cyan-600 px-6 py-2 rounded-lg font-bold hover:bg-gray-100 transition">
+                                Upgrade to Pro
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Trial expired
+            if (subscription.status === 'expired') {
+                return `
+                    <div class="bg-red-900/90 p-4 text-center border-b-2 border-red-600">
+                        <div class="max-w-7xl mx-auto flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-lock text-2xl text-red-400"></i>
+                                <span class="font-bold text-lg">
+                                    🔒 Your trial has expired. Upgrade to continue monitoring.
+                                </span>
+                            </div>
+                            <button onclick="showUpgradeModal()" class="bg-red-600 hover:bg-red-700 px-6 py-2 rounded-lg font-bold transition">
+                                Upgrade Now
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Active subscription
+            if (subscription.status === 'active') {
+                return `
+                    <div class="bg-green-900/30 p-3 text-center border-b border-green-600">
+                        <div class="max-w-7xl mx-auto flex items-center justify-center gap-3">
+                            <i class="fas fa-crown text-yellow-500"></i>
+                            <span class="font-semibold">
+                                Pro Plan Active - Next billing: ${new Date(subscription.current_period_end).toLocaleDateString()}
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            return '';
         }
 
         function renderHeader() {
@@ -240,23 +556,35 @@
             const criticalIncidents = state.incidents?.filter(i => i.severity === 'critical').length || 0;
             const autoMode = state.autonomousStatus?.execution_mode || 'manual';
             
+            // Check if premium features are locked
+            const isPremiumLocked = !isFeatureAllowed('auto_remediation');
+            
             return `
-                <div class="card border-b sticky top-0 z-50 backdrop-blur-sm" style="background-color: rgba(42, 42, 42, 0.95);">
+                <div class="card border-b sticky top-0 z-40 backdrop-blur-sm" style="background-color: rgba(42, 42, 42, 0.95);">
                     <div class="max-w-7xl mx-auto px-6 py-4">
                        <!-- Branding Section -->
                         <div class="flex items-center gap-4 mb-6">
-                            <img src="img/deployr_logo.png" class="h-20 w-20 object-contain" />
+                            <div class="flex items-center gap-4 mb-6">
+                                <img src="img/deployr_logo.png" class="h-20 w-20 object-contain" />
+                            </div>
                             <div>
                                 <h1 class="text-3xl font-bold tracking-wide">Deployr</h1>
-                                <p class="text-base text-gray-400">We watch so you don’t have to.</p>
+                                <p class="text-base text-gray-400">We watch so you don't have to.</p>
                             </div>
+                            ${isPremiumLocked ? `
+                                <div class="ml-auto">
+                                    <button onclick="switchView('subscription')" class="bg-yellow-600 hover:bg-yellow-700 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition">
+                                        <i class="fas fa-crown"></i>
+                                        View Subscription
+                                    </button>
+                                </div>
+                            ` : ''}
                         </div>
-
 
                         <!-- Functional Controls -->
                         <div class="flex items-center justify-between mb-4">
                             <div class="flex items-center gap-3">
-                                ${renderModeIndicator(autoMode)}
+                                ${renderModeIndicator(autoMode, isPremiumLocked)}
                             </div>
                             <div class="flex items-center gap-3">
                                 <button onclick="toggleAutoRefresh()" class="${autoRefresh ? 'bg-green-600 hover:bg-green-700' : 'card hover:bg-opacity-80'} px-4 py-2 rounded-lg font-medium transition text-sm">
@@ -281,16 +609,27 @@
                         <div class="flex gap-2 overflow-x-auto pb-2">
                             ${renderNavButton('control-center', 'fa-th-large', 'Control Center')}
                             ${renderNavButton('incidents', 'fa-exclamation-triangle', 'Incidents', criticalIncidents)}
-                            ${renderNavButton('actions', 'fa-bolt', 'Actions', pendingCount)}
-                            ${renderNavButton('autonomous', 'fa-robot', 'Autonomous')}
+                            ${renderNavButton('actions', 'fa-bolt', 'Actions', pendingCount, isPremiumLocked)}
+                            ${renderNavButton('autonomous', 'fa-robot', 'Autonomous', 0, isPremiumLocked)}
                             ${renderNavButton('services', 'fa-server', 'Services')}
                             ${renderNavButton('analytics', 'fa-chart-line', 'Analytics')}
+                            ${renderNavButton('subscription', 'fa-crown', 'Subscription', 0, false, true)}
                         </div>
                     </div>
                 </div>
             `;
         }
-        function renderModeIndicator(mode) {
+
+        function renderModeIndicator(mode, isLocked) {
+            if (isLocked) {
+                return `
+                    <div class="bg-gray-700 text-gray-400 px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2">
+                        <i class="fas fa-lock"></i>
+                        <span class="uppercase tracking-wide">PREMIUM LOCKED</span>
+                    </div>
+                `;
+            }
+
             const colors = {
                 manual: 'bg-gray-700 text-gray-300',
                 supervised: 'bg-blue-700 text-blue-200',
@@ -325,12 +664,14 @@
             `;
         }
 
-        function renderNavButton(view, icon, label, badge = 0) {
+        function renderNavButton(view, icon, label, badge = 0, isLocked = false, isSpecial = false) {
             const isActive = currentView === view;
             return `
-                <button onclick="switchView('${view}')" class="nav-button ${isActive ? 'active' : ''} px-6 py-3 rounded-t-lg font-medium transition relative whitespace-nowrap text-sm ${isActive ? 'text-primary' : 'text-gray-400'}">
+                <button onclick="switchView('${view}')" class="nav-button ${isActive ? 'active' : ''} px-6 py-3 rounded-t-lg font-medium transition relative whitespace-nowrap text-sm ${isActive ? 'text-primary' : 'text-gray-400'} ${isLocked ? 'opacity-50' : ''}">
                     <i class="fas ${icon} mr-2"></i>${label}
                     ${badge > 0 ? `<span class="absolute -top-1 -right-1 bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full">${badge}</span>` : ''}
+                    ${isLocked ? `<i class="fas fa-lock text-xs ml-1"></i>` : ''}
+                    ${isSpecial ? `<i class="fas fa-star text-yellow-500 text-xs ml-1"></i>` : ''}
                 </button>
             `;
         }
@@ -342,7 +683,8 @@
                 'actions': renderActionsView,
                 'autonomous': renderAutonomousView,
                 'services': renderServicesView,
-                'analytics': renderAnalyticsView
+                'analytics': renderAnalyticsView,
+                'subscription': renderSubscriptionView
             };
 
             const renderFunc = views[currentView] || renderControlCenter;
@@ -354,15 +696,188 @@
             `;
         }
 
+        function renderSubscriptionView() {
+            if (!subscription) return '<div class="text-center">Loading subscription...</div>';
+            
+            const daysRemaining = getDaysRemaining();
+            const isTrialing = subscription.status === 'trialing';
+            const isActive = subscription.status === 'active';
+            const isExpired = subscription.status === 'expired';
+            
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-3xl font-bold mb-6 flex items-center gap-3">
+                        <i class="fas fa-crown text-yellow-500"></i>
+                        Subscription Management
+                    </h2>
+
+                    <!-- Current Status Card -->
+                    <div class="card rounded-xl p-8 ${
+                        isActive ? 'border-2 border-green-600' :
+                        isTrialing ? 'border-2 border-cyan-600' :
+                        'border-2 border-red-600'
+                    }">
+                        <div class="flex items-start justify-between mb-6">
+                            <div>
+                                <div class="flex items-center gap-3 mb-2">
+                                    <i class="fas ${
+                                        isActive ? 'fa-check-circle text-green-500' :
+                                        isTrialing ? 'fa-clock text-cyan-500' :
+                                        'fa-lock text-red-500'
+                                    } text-3xl"></i>
+                                    <h3 class="text-2xl font-bold capitalize">${subscription.status} ${isActive ? 'Pro' : isTrialing ? 'Trial' : ''} Plan</h3>
+                                </div>
+                                <p class="text-gray-400">
+                                    ${isTrialing ? `${daysRemaining} days remaining in your trial` :
+                                      isActive ? `Next billing: ${new Date(subscription.current_period_end).toLocaleDateString()}` :
+                                      'Your trial has ended'}
+                                </p>
+                            </div>
+                            ${!isActive ? `
+                                <button onclick="showUpgradeModal()" class="bg-primary hover:bg-primary-dark text-black px-6 py-3 rounded-lg font-bold transition">
+                                    <i class="fas fa-arrow-up mr-2"></i>Upgrade Now
+                                </button>
+                            ` : ''}
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4 mb-6">
+                            <div class="bg-black bg-opacity-50 rounded-lg p-4">
+                                <div class="text-sm text-gray-400 mb-1">Status</div>
+                                <div class="text-xl font-bold capitalize">${subscription.status}</div>
+                            </div>
+                            <div class="bg-black bg-opacity-50 rounded-lg p-4">
+                                <div class="text-sm text-gray-400 mb-1">Plan</div>
+                                <div class="text-xl font-bold">Pro</div>
+                            </div>
+                            <div class="bg-black bg-opacity-50 rounded-lg p-4">
+                                <div class="text-sm text-gray-400 mb-1">Started</div>
+                                <div class="text-xl font-bold">${new Date(subscription.created_at).toLocaleDateString()}</div>
+                            </div>
+                        </div>
+
+                        ${isExpired ? `
+                            <div class="bg-red-900/20 border border-red-600/50 rounded-lg p-4">
+                                <div class="flex items-start gap-3">
+                                    <i class="fas fa-exclamation-circle text-red-500 text-xl mt-1"></i>
+                                    <div>
+                                        <div class="font-bold mb-1">Premium Features Paused</div>
+                                        <p class="text-sm text-gray-300">
+                                            Your AI monitoring, auto-remediation, and alerts are currently disabled. 
+                                            Dashboard and incident history remain accessible.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- Feature Access Matrix -->
+                    <div class="card rounded-xl p-6">
+                        <h3 class="text-xl font-bold mb-4">
+                            <i class="fas fa-list-check text-primary mr-2"></i>Feature Access
+                        </h3>
+                        
+                        <div class="space-y-3">
+                            ${renderFeatureRow('Dashboard & Incident History', true, 'Always available')}
+                            ${renderFeatureRow('AI Anomaly Detection', !isExpired, isExpired ? 'Requires active subscription' : 'Enabled')}
+                            ${renderFeatureRow('Auto-Remediation Actions', !isExpired, isExpired ? 'Requires active subscription' : 'Enabled')}
+                            ${renderFeatureRow('AI Root Cause Analysis', !isExpired, isExpired ? 'Requires active subscription' : 'Enabled')}
+                            ${renderFeatureRow('Slack Alerts', !isExpired, isExpired ? 'Requires active subscription' : 'Enabled')}
+                            ${renderFeatureRow('Autonomous Mode (Phase 3)', !isExpired, isExpired ? 'Requires active subscription' : 'Enabled')}
+                            ${renderFeatureRow('Learning & Pattern Recognition', !isExpired, isExpired ? 'Requires active subscription' : 'Enabled')}
+                        </div>
+                    </div>
+
+                    <!-- Pricing Info -->
+                    ${!isActive ? `
+                        <div class="card rounded-xl p-6 border-2 border-primary">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <h3 class="text-2xl font-bold mb-2">Deployr Pro</h3>
+                                    <div class="text-4xl font-bold mb-4 text-primary">$99<span class="text-lg text-gray-400">/month</span></div>
+                                    
+                                    <div class="grid grid-cols-2 gap-4 mb-6">
+                                        <div class="flex items-start gap-2">
+                                            <i class="fas fa-check text-green-500 mt-1"></i>
+                                            <div>
+                                                <div class="font-semibold">Unlimited Monitoring</div>
+                                                <div class="text-sm text-gray-400">Monitor all your services</div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-start gap-2">
+                                            <i class="fas fa-check text-green-500 mt-1"></i>
+                                            <div>
+                                                <div class="font-semibold">AI-Powered Analysis</div>
+                                                <div class="text-sm text-gray-400">Root cause detection</div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-start gap-2">
+                                            <i class="fas fa-check text-green-500 mt-1"></i>
+                                            <div>
+                                                <div class="font-semibold">Auto-Remediation</div>
+                                                <div class="text-sm text-gray-400">Automatic fixes</div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-start gap-2">
+                                            <i class="fas fa-check text-green-500 mt-1"></i>
+                                            <div>
+                                                <div class="font-semibold">24/7 Alerts</div>
+                                                <div class="text-sm text-gray-400">Slack notifications</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <button onclick="showUpgradeModal()" class="bg-primary hover:bg-primary-dark text-black px-8 py-4 rounded-lg font-bold text-lg transition">
+                                        <i class="fas fa-rocket mr-2"></i>Upgrade to Pro
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function renderFeatureRow(name, allowed, status) {
+            return `
+                <div class="flex items-center justify-between p-3 bg-black bg-opacity-30 rounded-lg">
+                    <div class="flex items-center gap-3">
+                        <i class="fas ${allowed ? 'fa-check-circle text-green-500' : 'fa-lock text-red-500'}"></i>
+                        <span class="${allowed ? '' : 'text-gray-500'}">${name}</span>
+                    </div>
+                    <span class="text-sm ${allowed ? 'text-green-400' : 'text-red-400'}">${status}</span>
+                </div>
+            `;
+        }
+
+        // Continuing with existing render functions...
         function renderControlCenter() {
             const critical = state.incidents.filter(i => i.severity === 'critical').length;
             const pending = state.pendingActions.length;
             const autoSuccess = state.outcomes.filter(o => o.success).length;
             const autoTotal = state.outcomes.length;
             const successRate = autoTotal > 0 ? ((autoSuccess / autoTotal) * 100).toFixed(1) : 0;
+            const isPremiumLocked = !isFeatureAllowed('auto_remediation');
 
             return `
                 <div class="space-y-6">
+                    ${isPremiumLocked ? `
+                        <div class="bg-orange-900/20 border-2 border-orange-600 rounded-xl p-6">
+                            <div class="flex items-start gap-4">
+                                <i class="fas fa-exclamation-triangle text-orange-500 text-3xl"></i>
+                                <div class="flex-1">
+                                    <h3 class="text-xl font-bold mb-2">Premium Features Locked</h3>
+                                    <p class="text-gray-300 mb-4">
+                                        Your trial has ended. Upgrade to Pro to restore AI monitoring, auto-remediation, and real-time alerts.
+                                    </p>
+                                    <button onclick="showUpgradeModal()" class="bg-orange-600 hover:bg-orange-700 px-6 py-3 rounded-lg font-bold transition">
+                                        <i class="fas fa-crown mr-2"></i>Upgrade Now
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+
                     <div class="card rounded-xl p-6 shadow-xl">
                         <h2 class="text-2xl font-bold mb-6 flex items-center gap-3">
                             <i class="fas fa-th-large text-primary"></i>
@@ -384,60 +899,50 @@
                                         <span class="text-sm text-gray-400">Anomalies (24h)</span>
                                         <span class="text-2xl font-bold text-orange-400">${state.anomalies.length}</span>
                                     </div>
-                                    <div class="flex justify-between items-center">
-                                        <span class="text-sm text-gray-400">Services Monitored</span>
-                                        <span class="text-2xl font-bold text-primary">${state.services.length}</span>
-                                    </div>
                                 </div>
                             </div>
 
-                            <div class="bg-black bg-opacity-30 rounded-lg p-6 border-l-4 border-purple-500">
+                            <div class="bg-black bg-opacity-30 rounded-lg p-6 border-l-4 border-purple-500 ${isPremiumLocked ? 'opacity-50' : ''}">
                                 <div class="flex items-center justify-between mb-4">
                                     <h3 class="font-bold text-lg">Phase 2: Supervised</h3>
-                                    <span class="bg-purple-900/50 text-purple-300 px-3 py-1 rounded-full text-xs font-bold">ACTIVE</span>
+                                    <span class="bg-purple-900/50 text-purple-300 px-3 py-1 rounded-full text-xs font-bold">
+                                        ${isPremiumLocked ? 'LOCKED' : 'ACTIVE'}
+                                    </span>
                                 </div>
                                 <div class="space-y-3">
                                     <div class="flex justify-between items-center">
                                         <span class="text-sm text-gray-400">Pending Approval</span>
-                                        <span class="text-2xl font-bold ${pending > 0 ? 'text-orange-400' : 'text-gray-400'}">${pending}</span>
+                                        <span class="text-2xl font-bold ${isPremiumLocked ? 'text-gray-600' : pending > 0 ? 'text-orange-400' : 'text-gray-400'}">${isPremiumLocked ? '—' : pending}</span>
                                     </div>
                                     <div class="flex justify-between items-center">
                                         <span class="text-sm text-gray-400">Actions Learned</span>
                                         <span class="text-2xl font-bold text-purple-400">${state.learningStats.total_actions_recorded || 0}</span>
                                     </div>
-                                    <div class="flex justify-between items-center">
-                                        <span class="text-sm text-gray-400">Incidents Learned</span>
-                                        <span class="text-2xl font-bold text-primary">${state.learningStats.total_incidents_learned || 0}</span>
-                                    </div>
                                 </div>
+                                ${isPremiumLocked ? '<div class="absolute inset-0 flex items-center justify-center"><i class="fas fa-lock text-4xl text-gray-700"></i></div>' : ''}
                             </div>
 
-                            <div class="bg-black bg-opacity-30 rounded-lg p-6 border-l-4 border-green-500">
+                            <div class="bg-black bg-opacity-30 rounded-lg p-6 border-l-4 border-green-500 ${isPremiumLocked ? 'opacity-50' : ''}">
                                 <div class="flex items-center justify-between mb-4">
                                     <h3 class="font-bold text-lg">Phase 3: Autonomous</h3>
                                     <span class="bg-green-900/50 text-green-300 px-3 py-1 rounded-full text-xs font-bold">
-                                        ${state.autonomousStatus?.autonomous_enabled ? 'ENABLED' : 'DISABLED'}
+                                        ${isPremiumLocked ? 'LOCKED' : state.autonomousStatus?.autonomous_enabled ? 'ENABLED' : 'DISABLED'}
                                     </span>
                                 </div>
                                 <div class="space-y-3">
                                     <div class="flex justify-between items-center">
-                                        <span class="text-sm text-gray-400">Auto Success Rate</span>
-                                        <span class="text-2xl font-bold ${successRate > 80 ? 'text-green-400' : successRate > 60 ? 'text-yellow-400' : 'text-red-400'}">${successRate}%</span>
+                                        <span class="text-sm text-gray-400">Success Rate</span>
+                                        <span class="text-2xl font-bold ${isPremiumLocked ? 'text-gray-600' : 'text-green-400'}">${isPremiumLocked ? '—' : successRate}%</span>
                                     </div>
                                     <div class="flex justify-between items-center">
                                         <span class="text-sm text-gray-400">Auto Executed</span>
-                                        <span class="text-2xl font-bold text-green-400">${autoSuccess}</span>
-                                    </div>
-                                    <div class="flex justify-between items-center">
-                                        <span class="text-sm text-gray-400">Confidence Threshold</span>
-                                        <span class="text-2xl font-bold text-primary">${state.autonomousStatus?.confidence_threshold || 75}%</span>
+                                        <span class="text-2xl font-bold text-green-400">${isPremiumLocked ? '—' : autoSuccess}</span>
                                     </div>
                                 </div>
+                                ${isPremiumLocked ? '<div class="absolute inset-0 flex items-center justify-center"><i class="fas fa-lock text-4xl text-gray-700"></i></div>' : ''}
                             </div>
                         </div>
                     </div>
-
-                    ${pending > 0 ? renderQuickActionPanel() : ''}
 
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         ${renderRecentIncidents()}
@@ -447,53 +952,8 @@
             `;
         }
 
-        function renderQuickActionPanel() {
-            const urgentActions = state.pendingActions.slice(0, 3);
-
-            return `
-                <div class="bg-orange-900/20 border-2 border-orange-600/50 rounded-xl p-6 slide-in">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-xl font-bold flex items-center gap-2">
-                            <i class="fas fa-bolt text-orange-400 animate-pulse"></i>
-                            Urgent: Actions Awaiting Approval
-                        </h3>
-                        <button onclick="switchView('actions')" class="text-sm text-primary hover:text-primary-light font-semibold">
-                            View All <i class="fas fa-arrow-right ml-1"></i>
-                        </button>
-                    </div>
-                    
-                    <div class="space-y-3">
-                        ${urgentActions.map(action => `
-                            <div class="card rounded-lg p-4 border-l-4 ${action.risk === 'low' ? 'border-green-500' : action.risk === 'high' ? 'border-red-500' : 'border-orange-500'}">
-                                <div class="flex items-start justify-between mb-2">
-                                    <div class="flex-1">
-                                        <div class="font-bold text-lg">${action.action_type.replace(/_/g, ' ').toUpperCase()}</div>
-                                        <div class="text-sm text-gray-400">
-                                            <i class="fas fa-server mr-1"></i>${action.service} 
-                                            <span class="mx-2">•</span> 
-                                            <i class="fas fa-shield-alt mr-1"></i>${action.risk} risk
-                                        </div>
-                                    </div>
-                                    <div class="flex gap-2">
-                                        <button onclick="approveAction('${action.id}')" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm font-bold transition">
-                                            <i class="fas fa-check"></i>
-                                        </button>
-                                        <button onclick="rejectAction('${action.id}')" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded text-sm font-bold transition">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="text-sm text-gray-300">${action.reasoning}</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
         function renderRecentIncidents() {
             const recent = state.incidents.slice(0, 5);
-
             return `
                 <div class="card rounded-xl p-6">
                     <div class="flex items-center justify-between mb-4">
@@ -508,7 +968,7 @@
                     ${recent.length > 0 ? `
                         <div class="space-y-2">
                             ${recent.map(inc => `
-                                <div class="bg-black bg-opacity-30 rounded-lg p-3 hover:bg-opacity-40 transition cursor-pointer" onclick="viewIncident('${inc.id}')">
+                                <div class="bg-black bg-opacity-30 rounded-lg p-3 hover:bg-opacity-40 transition cursor-pointer">
                                     <div class="flex items-center justify-between mb-1">
                                         <span class="font-semibold">
                                             <i class="fas fa-server text-primary mr-2"></i>${inc.service}
@@ -518,9 +978,6 @@
                                         </span>
                                     </div>
                                     <div class="text-sm text-gray-400 truncate">${inc.root_cause}</div>
-                                    <div class="text-xs text-gray-500 mt-1">
-                                        <i class="fas fa-clock mr-1"></i>${formatTime(inc.timestamp)}
-                                    </div>
                                 </div>
                             `).join('')}
                         </div>
@@ -531,22 +988,29 @@
 
         function renderRecentActions() {
             const recent = state.actionHistory.slice(0, 5);
-
+            const isPremiumLocked = !isFeatureAllowed('auto_remediation');
+            
             return `
-                <div class="card rounded-xl p-6">
+                <div class="card rounded-xl p-6 ${isPremiumLocked ? 'opacity-50' : ''}">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-xl font-bold">
                             <i class="fas fa-bolt text-primary mr-2"></i>Recent Actions
+                            ${isPremiumLocked ? '<i class="fas fa-lock text-sm ml-2 text-red-500"></i>' : ''}
                         </h3>
-                        <button onclick="switchView('actions')" class="text-sm text-primary hover:text-primary-light">
-                            View All <i class="fas fa-arrow-right ml-1"></i>
-                        </button>
                     </div>
                     
-                    ${recent.length > 0 ? `
+                    ${isPremiumLocked ? `
+                        <div class="text-center py-8">
+                            <i class="fas fa-lock text-4xl text-red-500 mb-4"></i>
+                            <p class="text-gray-400 mb-4">Premium feature locked</p>
+                            <button onclick="showUpgradeModal()" class="bg-primary hover:bg-primary-dark text-black px-4 py-2 rounded-lg font-semibold transition">
+                                Upgrade to Access
+                            </button>
+                        </div>
+                    ` : recent.length > 0 ? `
                         <div class="space-y-2">
                             ${recent.map(action => `
-                                <div class="bg-black bg-opacity-30 rounded-lg p-3 hover:bg-opacity-40 transition">
+                                <div class="bg-black bg-opacity-30 rounded-lg p-3">
                                     <div class="flex items-center justify-between mb-1">
                                         <span class="font-semibold">
                                             <i class="fas fa-cog text-primary mr-2"></i>${action.action_type}
@@ -556,17 +1020,15 @@
                                         </span>
                                     </div>
                                     <div class="text-sm text-gray-400">${action.service}</div>
-                                    <div class="text-xs text-gray-500 mt-1">
-                                        <i class="fas fa-clock mr-1"></i>${formatTime(action.proposed_at)}
-                                    </div>
                                 </div>
                             `).join('')}
                         </div>
-                    ` : '<div class="text-center py-8 text-gray-500"><i class="fas fa-info-circle text-4xl text-gray-600 mb-2"></i><br>No recent actions</div>'}
+                    ` : '<div class="text-center py-8 text-gray-500">No recent actions</div>'}
                 </div>
             `;
         }
 
+        // Stub render functions for other views
         function renderIncidentsView() {
             return `
                 <div class="space-y-6">
@@ -587,7 +1049,7 @@
                     ${state.incidents.length > 0 ? `
                         <div class="space-y-3">
                             ${state.incidents.map(inc => `
-                                <div class="card rounded-xl p-6 border-l-4 ${inc.severity === 'critical' ? 'border-red-500' : inc.severity === 'high' ? 'border-orange-500' : 'border-yellow-500'} hover:shadow-xl transition cursor-pointer" onclick="viewIncident('${inc.id}')">
+                                <div class="card rounded-xl p-6 border-l-4 ${inc.severity === 'critical' ? 'border-red-500' : inc.severity === 'high' ? 'border-orange-500' : 'border-yellow-500'} hover:shadow-xl transition">
                                     <div class="flex items-start justify-between mb-4">
                                         <div class="flex-1">
                                             <div class="flex items-center gap-3 mb-2">
@@ -595,7 +1057,7 @@
                                                 <div>
                                                     <h3 class="font-bold text-lg">${inc.service}</h3>
                                                     <div class="text-sm text-gray-400">
-                                                        <i class="fas fa-clock mr-1"></i>${formatTime(inc.timestamp)}
+                                                        <i class="fas fa-clock mr-1"></i>${new Date(inc.timestamp).toLocaleString()}
                                                     </div>
                                                 </div>
                                             </div>
@@ -605,7 +1067,7 @@
                                                     <i class="fas fa-chart-line mr-1"></i>${inc.anomaly_count} anomalies
                                                 </span>
                                                 <span class="text-gray-400">
-                                                    <i class="fas fa-percent mr-1"></i>${inc.confidence}% confidence
+                                                    <i class="fas fa-percent mr-1"></i>${inc.confidence} percent confidence
                                                 </span>
                                                 <span class="text-gray-400">
                                                     <i class="fas fa-users mr-1"></i>${inc.customer_impact}
@@ -613,7 +1075,7 @@
                                             </div>
                                         </div>
                                         <span class="px-3 py-1 rounded-full text-xs font-bold ${getSeverityClass(inc.severity)}">
-                                            ${inc.severity}
+                                            ${inc.severity.toUpperCase()}
                                         </span>
                                     </div>
                                 </div>
@@ -629,8 +1091,24 @@
                 </div>
             `;
         }
-
-        function renderActionsView() {
+        
+        function renderActionsView() { 
+            const isPremiumLocked = !isFeatureAllowed('auto_remediation');
+            if (isPremiumLocked) {
+                return `
+                    <div class="text-center py-20">
+                        <i class="fas fa-lock text-6xl text-red-500 mb-6"></i>
+                        <h2 class="text-3xl font-bold mb-4">Premium Feature</h2>
+                        <p class="text-gray-400 mb-6 max-w-md mx-auto">
+                            Action management requires an active subscription. Upgrade to access AI-powered auto-remediation.
+                        </p>
+                        <button onclick="showUpgradeModal()" class="bg-primary hover:bg-primary-dark text-black px-8 py-4 rounded-lg font-bold text-lg transition">
+                            <i class="fas fa-arrow-up mr-2"></i>Upgrade Now
+                        </button>
+                    </div>
+                `;
+            }
+            
             return `
                 <div class="space-y-6">
                     <h2 class="text-2xl font-bold">
@@ -640,7 +1118,7 @@
                     ${state.pendingActions.length > 0 ? `
                         <div class="bg-orange-900/20 border-2 border-orange-600/50 rounded-xl p-6">
                             <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
-                                <i class="fas fa-clock text-orange-400 animate-pulse"></i>
+                                <i class="fas fa-clock text-orange-400"></i>
                                 Pending Approval (${state.pendingActions.length})
                             </h3>
                             <div class="space-y-4">
@@ -656,8 +1134,6 @@
                                                 </div>
                                                 <div class="text-sm text-gray-400 mb-2">
                                                     <i class="fas fa-server mr-1"></i>${action.service}
-                                                    <span class="mx-2">•</span>
-                                                    <i class="fas fa-clock mr-1"></i>${formatTime(action.proposed_at)}
                                                 </div>
                                                 <div class="bg-black bg-opacity-30 rounded p-3 mb-3">
                                                     <div class="text-sm font-semibold mb-1">Reasoning:</div>
@@ -668,7 +1144,7 @@
                                                 <button onclick="approveAction('${action.id}')" class="bg-green-600 hover:bg-green-700 px-6 py-3 rounded-lg font-bold transition">
                                                     <i class="fas fa-check mr-2"></i>Approve
                                                 </button>
-                                                <button onclick="rejectAction('${action.id}')" class="bg-red-600 hover:bg-red-700 px-6 py-3 rounded-lg font-bold transition">
+                                                <button class="bg-red-600 hover:bg-red-700 px-6 py-3 rounded-lg font-bold transition">
                                                     <i class="fas fa-times mr-2"></i>Reject
                                                 </button>
                                             </div>
@@ -677,7 +1153,13 @@
                                 `).join('')}
                             </div>
                         </div>
-                    ` : ''}
+                    ` : `
+                        <div class="card rounded-xl p-12 text-center">
+                            <i class="fas fa-check-circle text-6xl text-green-500 mb-4"></i>
+                            <p class="text-xl font-semibold mb-2">No Pending Actions</p>
+                            <p class="text-gray-400">All actions have been processed</p>
+                        </div>
+                    `}
 
                     <div class="card rounded-xl p-6">
                         <h3 class="text-xl font-bold mb-4">
@@ -710,7 +1192,7 @@
                                                         ${action.risk}
                                                     </span>
                                                 </td>
-                                                <td class="px-4 py-3 text-sm text-gray-400">${formatTime(action.proposed_at)}</td>
+                                                <td class="px-4 py-3 text-sm text-gray-400">${new Date(action.proposed_at).toLocaleString()}</td>
                                             </tr>
                                         `).join('')}
                                     </tbody>
@@ -721,8 +1203,24 @@
                 </div>
             `;
         }
-
-        function renderAutonomousView() {
+        
+        function renderAutonomousView() { 
+            const isPremiumLocked = !isFeatureAllowed('autonomous_mode');
+            if (isPremiumLocked) {
+                return `
+                    <div class="text-center py-20">
+                        <i class="fas fa-robot text-6xl text-red-500 mb-6"></i>
+                        <h2 class="text-3xl font-bold mb-4">Autonomous Mode Locked</h2>
+                        <p class="text-gray-400 mb-6 max-w-md mx-auto">
+                            Autonomous execution requires an active Pro subscription. Let AI handle incidents automatically.
+                        </p>
+                        <button onclick="showUpgradeModal()" class="bg-primary hover:bg-primary-dark text-black px-8 py-4 rounded-lg font-bold text-lg transition">
+                            <i class="fas fa-arrow-up mr-2"></i>Upgrade to Pro
+                        </button>
+                    </div>
+                `;
+            }
+            
             const status = state.autonomousStatus || {};
             const safety = state.safetyStatus || {};
             const outcomes = state.outcomes || [];
@@ -743,7 +1241,7 @@
                         <h3 class="text-xl font-bold mb-4">Execution Mode</h3>
                         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
                             ${['manual', 'supervised', 'autonomous', 'night_mode'].map(mode => `
-                                <button onclick="setAutonomousMode('${mode}')" class="p-6 rounded-lg border-2 transition ${status.execution_mode === mode ? 'border-primary bg-primary bg-opacity-10' : 'border-gray-700 hover:border-gray-600'} text-left">
+                                <button class="p-6 rounded-lg border-2 transition ${status.execution_mode === mode ? 'border-primary bg-primary bg-opacity-10' : 'border-gray-700 hover:border-gray-600'} text-left">
                                     <div class="text-3xl mb-2">
                                         <i class="fas ${{ manual: 'fa-hand-paper', supervised: 'fa-eye', autonomous: 'fa-robot', night_mode: 'fa-moon' }[mode]} text-primary"></i>
                                     </div>
@@ -759,42 +1257,6 @@
                                 </button>
                             `).join('')}
                         </div>
-
-                        <div class="mt-6">
-                            <label class="block text-sm font-medium mb-2">
-                                Confidence Threshold: <span id="threshold-display" class="text-primary">${status.confidence_threshold || 75}</span>%
-                            </label>
-                            <input type="range" id="confidence-slider" min="0" max="100" step="5" value="${status.confidence_threshold || 75}" 
-                                   oninput="document.getElementById('threshold-display').textContent = this.value"
-                                   class="w-full h-2 rounded-lg appearance-none cursor-pointer"
-                                   style="background: linear-gradient(to right, var(--primary) 0%, var(--primary) ${status.confidence_threshold || 75}%, #3A3A3A ${status.confidence_threshold || 75}%, #3A3A3A 100%);">
-                            <div class="flex justify-between text-xs text-gray-400 mt-1">
-                                <span>Conservative</span>
-                                <span>Aggressive</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card rounded-xl p-6">
-                        <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
-                            <i class="fas fa-shield-alt text-primary"></i> Safety Rails
-                        </h3>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            ${renderSafetyMetric('Concurrent Actions', safety.current_state?.active_actions || 0, safety.limits?.max_concurrent_actions || 3)}
-                            ${renderSafetyMetric('Recent Rollbacks', safety.current_state?.recent_rollbacks || 0, safety.limits?.max_rollbacks_per_hour || 2)}
-                            <div class="bg-black bg-opacity-30 rounded-lg p-4">
-                                <div class="text-sm text-gray-400">
-                                    <i class="fas fa-stopwatch mr-1"></i>Action Cooldown
-                                </div>
-                                <div class="text-2xl font-bold">${safety.limits?.action_cooldown_seconds || 300}s</div>
-                            </div>
-                            <div class="bg-black bg-opacity-30 rounded-lg p-4">
-                                <div class="text-sm text-gray-400">
-                                    <i class="fas fa-pause-circle mr-1"></i>Active Cooldowns
-                                </div>
-                                <div class="text-2xl font-bold">${safety.current_state?.active_cooldowns || 0}</div>
-                            </div>
-                        </div>
                     </div>
 
                     <div class="card rounded-xl p-6">
@@ -806,8 +1268,8 @@
                                 <div class="text-sm text-gray-400 mb-2">
                                     <i class="fas fa-check-circle mr-1"></i>Success Rate
                                 </div>
-                                <div class="text-4xl font-bold text-green-400">${stats.success_rate}%</div>
-                                <div class="text-sm text-gray-500 mt-1">${stats.successes}/${stats.total} actions</div>
+                                <div class="text-4xl font-bold text-green-400">${stats.success_rate} percent</div>
+                                <div class="text-sm text-gray-500 mt-1">${stats.successes} of ${stats.total} actions</div>
                             </div>
                             <div class="bg-blue-900/20 rounded-lg p-6 border border-blue-700/50">
                                 <div class="text-sm text-gray-400 mb-2">
@@ -819,7 +1281,7 @@
                                 <div class="text-sm text-gray-400 mb-2">
                                     <i class="fas fa-percentage mr-1"></i>Avg Confidence
                                 </div>
-                                <div class="text-4xl font-bold text-purple-400">${status.confidence_threshold || 75}%</div>
+                                <div class="text-4xl font-bold text-purple-400">${status.confidence_threshold || 75} percent</div>
                             </div>
                         </div>
                     </div>
@@ -838,7 +1300,7 @@
                                                     <i class="fas ${outcome.success ? 'fa-check-circle text-green-400' : 'fa-times-circle text-red-400'}"></i>
                                                     <span class="font-bold">${outcome.action_type}</span>
                                                     <span class="text-gray-400 text-sm">
-                                                        <i class="fas fa-percentage mr-1"></i>Confidence: ${outcome.confidence}%
+                                                        <i class="fas fa-percentage mr-1"></i>Confidence: ${outcome.confidence} percent
                                                     </span>
                                                 </div>
                                                 <div class="text-sm text-gray-400">
@@ -857,24 +1319,7 @@
                 </div>
             `;
         }
-
-        function renderSafetyMetric(label, current, max) {
-            const percentage = (current / max) * 100;
-            const color = percentage > 80 ? 'bg-red-500' : percentage > 50 ? 'bg-yellow-500' : 'bg-green-500';
-
-            return `
-                <div class="bg-black bg-opacity-30 rounded-lg p-4">
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-sm text-gray-400">${label}</span>
-                        <span class="font-bold">${current} / ${max}</span>
-                    </div>
-                    <div class="w-full bg-gray-700 rounded-full h-2">
-                        <div class="${color} h-2 rounded-full transition-all" style="width: ${Math.min(percentage, 100)}%"></div>
-                    </div>
-                </div>
-            `;
-        }
-
+        
         function renderServicesView() {
             return `
                 <div class="space-y-6">
@@ -911,7 +1356,7 @@
                                                 <div class="text-xs text-gray-400">
                                                     <i class="fas fa-exclamation-triangle mr-1"></i>Error Rate
                                                 </div>
-                                                <div class="text-lg font-bold">${service.metrics.error_rate_percent}%</div>
+                                                <div class="text-lg font-bold">${service.metrics.error_rate_percent} percent</div>
                                             </div>
                                         ` : ''}
                                     </div>
@@ -927,7 +1372,7 @@
                 </div>
             `;
         }
-
+        
         function renderAnalyticsView() {
             const totalIncidents = state.incidents.length;
             const criticalIncidents = state.incidents.filter(i => i.severity === 'critical').length;
@@ -938,7 +1383,7 @@
             return `
                 <div class="space-y-6">
                     <h2 class="text-2xl font-bold">
-                        <i class="fas fa-chart-line text-primary mr-2"></i>Analytics & Insights
+                        <i class="fas fa-chart-line text-primary mr-2"></i>Analytics and Insights
                     </h2>
 
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -958,7 +1403,7 @@
                             <div class="text-sm opacity-90 mb-2">
                                 <i class="fas fa-percentage mr-1"></i>Avg Confidence
                             </div>
-                            <div class="text-4xl font-bold">${avgConfidence.toFixed(0)}%</div>
+                            <div class="text-4xl font-bold">${avgConfidence.toFixed(0)} percent</div>
                         </div>
                         <div style="background: linear-gradient(135deg, var(--primary), var(--primary-dark));" class="rounded-xl p-6 text-black">
                             <div class="text-sm opacity-90 mb-2">
@@ -1012,25 +1457,8 @@
                 </div>
             `;
         }
-
-        function renderHealthMetric(label, value, color) {
-            const colors = {
-                green: 'bg-green-900/30 border-green-700/50 text-green-400',
-                orange: 'bg-orange-900/30 border-orange-700/50 text-orange-400',
-                red: 'bg-red-900/30 border-red-700/50 text-red-400',
-                primary: 'border-primary/50 text-primary'
-            };
-            const bgColor = color === 'primary' ? 'rgba(0, 188, 212, 0.1)' : '';
-
-            return `
-                <div class="${colors[color]} rounded-lg p-6 border" ${bgColor ? `style="background-color: ${bgColor};"` : ''}>
-                    <div class="text-sm mb-2">${label}</div>
-                    <div class="text-3xl font-bold">${value}</div>
-                </div>
-            `;
-        }
-
-        function renderNotifications() {
+        
+         function renderNotifications() {
             const criticalIncidents = state.incidents.filter(i => i.severity === 'critical').length;
             const urgentActions = state.pendingActions.filter(a => a.risk === 'high').length;
 
@@ -1071,7 +1499,7 @@
             `;
         }
 
-        // Helper Functions
+        // Helper functions
         function getSeverityClass(severity) {
             const classes = {
                 critical: 'bg-red-900/50 text-red-300',
@@ -1082,41 +1510,14 @@
             return classes[severity] || classes.medium;
         }
 
-        function getRiskClass(risk) {
-            const classes = {
-                low: 'bg-green-900/50 text-green-300',
-                medium: 'bg-orange-900/50 text-orange-300',
-                high: 'bg-red-900/50 text-red-300'
-            };
-            return classes[risk] || classes.medium;
-        }
-
         function getStatusClass(status) {
             const classes = {
                 pending: 'bg-yellow-900/50 text-yellow-300',
                 approved: 'bg-blue-900/50 text-blue-300',
-                executing: 'bg-purple-900/50 text-purple-300',
                 success: 'bg-green-900/50 text-green-300',
-                failed: 'bg-red-900/50 text-red-300',
-                rejected: 'bg-gray-900/50 text-gray-300'
+                failed: 'bg-red-900/50 text-red-300'
             };
             return classes[status] || classes.pending;
-        }
-
-        function formatTime(timestamp) {
-            if (!timestamp) return 'Unknown';
-            const date = new Date(timestamp);
-            const now = new Date();
-            const diff = Math.floor((now - date) / 60000);
-            if (diff < 1) return 'Just now';
-            if (diff < 60) return `${diff}m ago`;
-            if (diff < 1440) return `${Math.floor(diff / 60)}h ago`;
-            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-        }
-
-        function viewIncident(incidentId) {
-            state.selectedIncident = incidentId;
-            alert('Incident details: ' + incidentId);
         }
 
         async function approveAction(actionId) {
@@ -1134,68 +1535,20 @@
                 });
 
                 if (response.ok) {
-                    alert('✅ Action approved!');
+                    showNotification('Action approved successfully', 'success');
                     fetchAllData();
                 } else {
-                    alert('❌ Failed to approve action');
+                    showNotification('Failed to approve action', 'error');
                 }
             } catch (error) {
-                alert('❌ Error: ' + error.message);
-            }
-        }
-
-        async function rejectAction(actionId) {
-            if (!confirm('Reject this action?')) return;
-
-            try {
-                const response = await fetch(`${API_BASE}/api/v2/actions/reject`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action_id: actionId,
-                        approved_by: 'dashboard_user',
-                        notes: 'Rejected via Deployr dashboard'
-                    })
-                });
-
-                if (response.ok) {
-                    alert('✅ Action rejected');
-                    fetchAllData();
-                } else {
-                    alert('❌ Failed to reject action');
-                }
-            } catch (error) {
-                alert('❌ Error: ' + error.message);
-            }
-        }
-
-        async function setAutonomousMode(mode) {
-            const threshold = document.getElementById('confidence-slider')?.value || 75;
-
-            try {
-                const response = await fetch(`${API_BASE}/api/v3/autonomous/mode`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        mode: mode,
-                        confidence_threshold: parseInt(threshold)
-                    })
-                });
-
-                if (response.ok) {
-                    alert(`✅ Mode changed to ${mode}`);
-                    fetchAllData();
-                } else {
-                    alert('❌ Failed to change mode');
-                }
-            } catch (error) {
-                alert('❌ Error: ' + error.message);
+                showNotification('Error: ' + error.message, 'error');
             }
         }
 
         // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            fetchAllData();
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initializeSubscription();
+            await fetchAllData();
         });
     </script>
 </body>

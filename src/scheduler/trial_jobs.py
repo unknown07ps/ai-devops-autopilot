@@ -4,7 +4,7 @@ import httpx
 import redis
 from datetime import datetime, timezone
 
-from src.notifications.email import send_expiry_reminder_email
+from notifications.email import send_expiry_reminder_email
 
 async def check_trial_expirations():
     try:
