@@ -6,6 +6,10 @@ from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from api.auth_api import router as auth_router
+from database import get_db
+from auth import get_current_user
+from models import User
 import redis
 import json
 from typing import List, Dict, Any, Optional
@@ -74,6 +78,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(subscription_router)
+app.include_router(auth_router)
 
 # ============================================================================
 # Data Models
@@ -519,58 +524,16 @@ async def get_config():
 # PHASE 3 API ENDPOINTS
 # ============================================================================
 
+from auth import get_current_active_subscription
+from models import Subscription
+
+# Use in endpoints:
 @app.get("/api/v3/autonomous/status")
-async def get_autonomous_status(user_id: str):
-    """Get current autonomous execution status (subscription-gated)"""
-    try:
-        # Check subscription first
-        access = await check_access(user_id, "autonomous_mode")
-
-        if not access["allowed"]:
-            return {
-                "autonomous_enabled": False,
-                "execution_mode": "manual",
-                "status": "restricted",
-                "message": "Autonomous mode requires an active subscription",
-                "reason": access.get("reason"),
-                "plan": access.get("plan"),
-                "upgrade_required": access.get("upgrade_required", True),
-                "available_in": access.get("available_in", ["pro", "enterprise"]),
-                "upgrade_url": "/api/subscription/create-checkout-session?user_id=" + user_id
-            }
-
-        # Check if autonomous executor is available
-        if not AUTONOMOUS_ENABLED or not autonomous_executor:
-            return {
-                "autonomous_enabled": False,
-                "execution_mode": "manual",
-                "status": "not_initialized",
-                "message": "Autonomous mode not initialized",
-                "error": "Phase 3 components not loaded. Check autonomous_executor.py exists in src/",
-                "plan": access.get("plan")
-            }
-
-        # Get autonomous stats
-        stats = autonomous_executor.get_autonomous_stats()
-
-        return {
-            "autonomous_enabled": True,
-            "execution_mode": stats["execution_mode"],
-            "confidence_threshold": stats["confidence_threshold"],
-            "total_autonomous_actions": stats["total_autonomous_actions"],
-            "successful_actions": stats["successful_actions"],
-            "success_rate": stats["success_rate"],
-            "active_actions": stats["active_actions"],
-            "learning_weights": stats["learning_weights"],
-            "night_mode_active": stats.get("is_night_mode_active"),
-            "status": "operational",
-            "plan": access.get("plan"),
-            "subscription_status": "active"
-        }
-
-    except Exception as e:
-        print(f"[API ERROR] get_autonomous_status: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch autonomous status")
+async def get_autonomous_status(
+    current_user: User = Depends(get_current_user),
+    subscription: Subscription = Depends(get_current_active_subscription),
+    db: Session = Depends(get_db)
+):
     
 @app.post("/api/v3/autonomous/mode")
 async def set_autonomous_mode(update: AutonomousModeUpdate, user_id: str):

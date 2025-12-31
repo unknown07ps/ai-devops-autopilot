@@ -1,50 +1,125 @@
 version: '3.8'
 
 services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: deployr-postgres
+    environment:
+      POSTGRES_DB: deployr
+      POSTGRES_USER: deployr
+      POSTGRES_PASSWORD: deployr_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deployr"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - deployr-network
+
   # Redis for event streaming and state
   redis:
     image: redis:7-alpine
+    container_name: deployr-redis
+    command: redis-server --appendonly yes
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 10s
       timeout: 3s
       retries: 5
+    networks:
+      - deployr-network
 
   # Main API service
   api:
     build: .
+    container_name: deployr-api
     ports:
       - "8000:8000"
     environment:
       - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://deployr:deployr_password@postgres:5432/deployr
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
       - ENVIRONMENT=development
     depends_on:
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     volumes:
       - ./src:/app/src
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - deployr-network
 
   # Background worker for processing events
   worker:
     build: .
+    container_name: deployr-worker
     environment:
       - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://deployr:deployr_password@postgres:5432/deployr
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
     depends_on:
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     volumes:
       - ./src:/app/src
     command: python src/worker.py
+    networks:
+      - deployr-network
+
+  # pgAdmin (optional - database management UI)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: deployr-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@deployr.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - deployr-network
+
+  # Ollama (for AI analysis)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: deployr-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - deployr-network
 
 volumes:
+  postgres_data:
+    driver: local
   redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  ollama_data:
+    driver: local
+
+networks:
+  deployr-network:
+    driver: bridge
