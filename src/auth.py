@@ -281,16 +281,20 @@ def cleanup_expired_sessions(db: Session):
 # ============================================================================
 
 def create_user(
-    db: Session,
+    db,
     email: str,
     password: str,
-    full_name: Optional[str] = None,
-    company: Optional[str] = None
-) -> User:
+    full_name = None,
+    company = None
+):
     """Create a new user account"""
+    from models import User
+    import secrets
+    
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == email).first()
     if existing_user:
+        from fastapi import HTTPException, status
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
@@ -314,7 +318,7 @@ def create_user(
     db.commit()
     db.refresh(user)
     
-    # Create trial subscription
+    # Import here to avoid circular dependency
     from subscription_service import create_trial_subscription
     create_trial_subscription(db, user)
     
@@ -338,8 +342,16 @@ def verify_password_reset_token(token: str) -> Optional[str]:
         return payload.get("sub")
     return None
 
-def reset_password(db: Session, email: str, new_password: str) -> bool:
-    """Reset user password"""
+def reset_password(db, token: str, new_password: str) -> bool:
+    """Reset user password using verified token"""
+    from models import User
+    
+    # Verify token and get email
+    email = verify_password_reset_token(token)
+    
+    if not email:
+        return False
+    
     user = db.query(User).filter(User.email == email).first()
     
     if not user:

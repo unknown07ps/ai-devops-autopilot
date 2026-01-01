@@ -1,6 +1,8 @@
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi import Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
@@ -10,6 +12,7 @@ from sqlalchemy.orm import Session
 import redis
 import json
 from typing import List, Dict, Any, Optional
+import re
 import os
 from dotenv import load_dotenv
 
@@ -40,16 +43,22 @@ scheduler = AsyncIOScheduler()
 # Validate critical environment variables
 def validate_environment():
     """Validate that critical environment variables are set"""
+    import os
+    
     errors = []
     warnings = []
     
-    # Database
+    # Database - REQUIRED
     if not os.getenv("DATABASE_URL"):
-        warnings.append("DATABASE_URL not set - using default PostgreSQL connection")
+        errors.append("DATABASE_URL is required for database connection")
     
-    # JWT Secret
+    # JWT Secret - CRITICAL
     if not os.getenv("JWT_SECRET_KEY"):
-        errors.append("JWT_SECRET_KEY not set - using generated secret (not persistent!)")
+        errors.append("JWT_SECRET_KEY is required - generate with: python -c 'import secrets; print(secrets.token_urlsafe(32))'")
+    
+    # Redis - REQUIRED
+    if not os.getenv("REDIS_URL"):
+        errors.append("REDIS_URL is required for application state")
     
     # Razorpay (optional but warn if not set)
     if not os.getenv("RAZORPAY_KEY_ID") or not os.getenv("RAZORPAY_KEY_SECRET"):
@@ -60,14 +69,17 @@ def validate_environment():
         warnings.append("Slack webhook not configured - notifications disabled")
     
     if errors:
-        print("[VALIDATION ERRORS]")
+        print("\n[VALIDATION ERRORS - APPLICATION CANNOT START]")
         for error in errors:
             print(f"  ❌ {error}")
+        print("\nPlease check your .env file and set required variables.\n")
+        raise ValueError("Critical environment variables missing")
     
     if warnings:
-        print("[VALIDATION WARNINGS]")
+        print("\n[VALIDATION WARNINGS]")
         for warning in warnings:
             print(f"  ⚠️  {warning}")
+        print()
     
     return len(errors) == 0
 
@@ -263,6 +275,31 @@ app = FastAPI(
     description="Autonomous incident detection, analysis, and response with subscription management",
     lifespan=lifespan
 )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler for unexpected errors"""
+    print(f"[GLOBAL ERROR] {request.method} {request.url.path}: {exc}")
+    
+    # Don't expose internal errors in production
+    if os.getenv("ENVIRONMENT") == "production":
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Internal server error",
+                "message": "An unexpected error occurred. Please try again later."
+            }
+        )
+    else:
+        # In development, show detailed error
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Internal server error",
+                "message": str(exc),
+                "type": type(exc).__name__
+            }
+        )
 
 # CORS middleware
 app.add_middleware(
@@ -628,6 +665,15 @@ async def get_action_history(
     limit: int = 50
 ):
     """Get action execution history"""
+    # Validate inputs
+    if limit < 1 or limit > 1000:
+        raise HTTPException(status_code=400, detail="Limit must be between 1 and 1000")
+    
+    if service:
+        # Validate service name format (alphanumeric, dash, underscore only)
+        if not re.match(r'^[a-zA-Z0-9_-]+$', service):
+            raise HTTPException(status_code=400, detail="Invalid service name format")
+        
     try:
         actions = []
         
@@ -657,7 +703,7 @@ async def get_learning_stats():
     """Get overall learning statistics"""
     try:
         services = set()
-        for key in redis_client.scan_iter("incident_history:*"):
+        for key in redis_client.scan_iter("incident_history:*"):  
             service = key.decode('utf-8').split(':')[1]
             services.add(service)
         
@@ -1334,7 +1380,7 @@ async def get_services():
     """Get status of all monitored services"""
     try:
         services_data = {}
-        baseline_keys = redis_client.keys("baseline:*")
+        baseline_keys = list(redis_client.scan_iter("baseline:*"))
         
         for key in baseline_keys:
             parts = key.decode('utf-8').split(':')
@@ -1350,7 +1396,7 @@ async def get_services():
                         'anomaly_count': 0
                     }
         
-        anomaly_keys = redis_client.keys("recent_anomalies:*")
+        anomaly_keys = list(redis_client.scan_iter("recent_anomalies:*"))
         
         for key in anomaly_keys:
             service_name = key.decode('utf-8').split(':')[1]

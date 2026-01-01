@@ -94,52 +94,55 @@ def create_trial_subscription(db: Session, user: User) -> Subscription:
     
     return subscription
 
-def upgrade_to_paid(
-    db: Session,
-    user_id: str,
-    plan: SubscriptionPlan,
-    payment_provider: str,
-    payment_provider_customer_id: str,
-    payment_provider_subscription_id: str
-) -> Subscription:
+def upgrade_to_paid(db, user_id: str, plan, payment_provider: str, 
+                   payment_provider_customer_id: str, 
+                   payment_provider_subscription_id: str):
     """Upgrade user to paid subscription"""
-    subscription = db.query(Subscription).filter(
-        Subscription.user_id == user_id
-    ).first()
+    from models import Subscription
+    from datetime import datetime, timedelta, timezone
     
-    if not subscription:
-        raise ValueError("No subscription found for user")
-    
-    now = datetime.now(timezone.utc)
-    period_end = now + timedelta(days=30)  # Monthly billing
-    
-    # Update subscription
-    old_status = subscription.status
-    subscription.plan = plan
-    subscription.status = SubscriptionStatus.ACTIVE
-    subscription.subscription_start = now
-    subscription.current_period_start = now
-    subscription.current_period_end = period_end
-    subscription.payment_provider = payment_provider
-    subscription.payment_provider_customer_id = payment_provider_customer_id
-    subscription.payment_provider_subscription_id = payment_provider_subscription_id
-    subscription.feature_limits = FEATURE_MATRIX[plan]
-    
-    db.commit()
-    db.refresh(subscription)
-    
-    # Log upgrade
-    log_audit_event(
-        db, user_id, "subscription.upgraded",
-        resource_type="subscription",
-        resource_id=subscription.subscription_id,
-        old_value={"status": old_status.value},
-        new_value={"status": "active", "plan": plan.value}
-    )
-    
-    print(f"[SUBSCRIPTION] Upgraded {user_id} to {plan.value}")
-    
-    return subscription
+    try:
+        subscription = db.query(Subscription).filter(
+            Subscription.user_id == user_id
+        ).first()
+        
+        if not subscription:
+            raise ValueError("No subscription found for user")
+        
+        now = datetime.now(timezone.utc)
+        period_end = now + timedelta(days=30)
+        
+        # Update subscription
+        old_status = subscription.status
+        subscription.plan = plan
+        subscription.status = SubscriptionStatus.ACTIVE
+        subscription.subscription_start = now
+        subscription.current_period_start = now
+        subscription.current_period_end = period_end
+        subscription.payment_provider = payment_provider
+        subscription.payment_provider_customer_id = payment_provider_customer_id
+        subscription.payment_provider_subscription_id = payment_provider_subscription_id
+        subscription.feature_limits = FEATURE_MATRIX[plan]
+        
+        db.commit()
+        db.refresh(subscription)
+        
+        # Log upgrade
+        log_audit_event(
+            db, user_id, "subscription.upgraded",
+            resource_type="subscription",
+            resource_id=subscription.subscription_id,
+            old_value={"status": old_status.value},
+            new_value={"status": "active", "plan": plan.value}
+        )
+        
+        print(f"[SUBSCRIPTION] Upgraded {user_id} to {plan.value}")
+        return subscription
+        
+    except Exception as e:
+        db.rollback()
+        print(f"[SUBSCRIPTION ERROR] Failed to upgrade: {e}")
+        raise
 
 # ============================================================================
 # Subscription Management

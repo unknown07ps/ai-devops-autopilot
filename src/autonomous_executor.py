@@ -43,6 +43,9 @@ class AutonomousExecutor:
         self.redis = redis_client
         self.action_executor = action_executor
         
+        # Add lock for thread safety
+        self._action_lock = asyncio.Lock()
+        
         # Configuration
         self.execution_mode = ExecutionMode.SUPERVISED
         self.confidence_threshold = 75  # Minimum confidence for autonomous execution
@@ -419,12 +422,13 @@ class AutonomousExecutor:
         print(f"  Confidence: {confidence:.1f}%")
         print(f"  Mode: {self.execution_mode.value}")
         
-        # Mark as executing
-        self.active_actions[action_id] = {
-            'action': action,
-            'started_at': datetime.now(timezone.utc),
-            'confidence': confidence
-        }
+        # Thread-safe update - mark action as active
+        async with self._action_lock:
+            self.active_actions[action_id] = {
+                'action': action,
+                'started_at': datetime.now(timezone.utc),
+                'confidence': confidence
+            }
         
         # Update action status
         action['status'] = 'executing_autonomous'
@@ -432,17 +436,18 @@ class AutonomousExecutor:
         action['autonomous_reasoning'] = reasoning
         action['executed_at'] = datetime.now(timezone.utc).isoformat()
         
-        self.redis.setex(f"action:{action_id}", 86400, json.dumps(action))
-        
         try:
+            # Save initial executing state to Redis
+            self.redis.setex(f"action:{action_id}", 86400, json.dumps(action))
+            
             # Execute via action executor
             result = await self.action_executor.execute_action(action_id)
             
-            # Update state
+            # Update state with completion time and result
             action['completed_at'] = datetime.now(timezone.utc).isoformat()
             action['result'] = result
             
-            if result['success']:
+            if result.get('success'):
                 action['status'] = 'success_autonomous'
                 print(f"[AUTONOMOUS] ✓ Action completed successfully")
                 
@@ -450,14 +455,19 @@ class AutonomousExecutor:
                 await self._record_autonomous_success(action, confidence)
             else:
                 action['status'] = 'failed_autonomous'
-                print(f"[AUTONOMOUS] ✗ Action failed: {result.get('error')}")
+                error_msg = result.get('error', 'Unknown error')
+                print(f"[AUTONOMOUS] ✗ Action failed: {error_msg}")
                 
                 # Learn from failure
                 await self._record_autonomous_failure(action, confidence)
             
-            # Update tracking
+            # Update tracking in Redis
             self.redis.setex(f"action:{action_id}", 86400, json.dumps(action))
+            
+            # Add to history (with size limit)
             self.action_history.append(action)
+            if len(self.action_history) > 1000:  # Keep last 1000 actions
+                self.action_history = self.action_history[-1000:]
             
             # Update last action time for cooldown
             cooldown_key = f"{action['service']}:{action['action_type']}"
@@ -467,18 +477,33 @@ class AutonomousExecutor:
             
         except Exception as e:
             print(f"[AUTONOMOUS] ✗ Execution error: {e}")
+            
+            # Update action with error details
             action['status'] = 'failed_autonomous'
             action['error'] = str(e)
+            action['completed_at'] = datetime.now(timezone.utc).isoformat()
             
-            self.redis.setex(f"action:{action_id}", 86400, json.dumps(action))
+            # Try to save error state to Redis
+            try:
+                self.redis.setex(f"action:{action_id}", 86400, json.dumps(action))
+            except Exception as redis_error:
+                print(f"[AUTONOMOUS] Failed to save error state to Redis: {redis_error}")
+            
+            # Record failure for learning
+            try:
+                await self._record_autonomous_failure(action, confidence)
+            except Exception as record_error:
+                print(f"[AUTONOMOUS] Failed to record failure: {record_error}")
             
             return {"success": False, "error": str(e)}
         
         finally:
-            # Remove from active
-            if action_id in self.active_actions:
-                del self.active_actions[action_id]
-    
+            # Thread-safe cleanup - always remove from active actions
+            async with self._action_lock:
+                if action_id in self.active_actions:
+                    del self.active_actions[action_id]
+                    print(f"[AUTONOMOUS] Cleaned up action {action_id} from active actions")
+                
     async def _record_autonomous_success(self, action: Dict, confidence: float):
         """Learn from successful autonomous action"""
         # Increase weights for successful predictions
