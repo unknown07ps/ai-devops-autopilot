@@ -414,7 +414,7 @@ async def health():
 async def health_database(db: Session = Depends(get_db)):
     """Detailed database health check"""
     try:
-        # FIX: Use text() wrapper for raw SQL
+        # Check connection - FIX: Use text() wrapper for raw SQL
         db.execute(text("SELECT 1"))
         
         # Count users and subscriptions

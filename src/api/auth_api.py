@@ -220,12 +220,13 @@ async def logout_all(
 # Profile Management
 # ============================================================================
 
+
 @router.get("/me", response_model=ProfileResponse)
 async def get_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get current user profile and subscription info"""
+    """Get current user profile and subscription info - FIXED"""
     # Get subscription
     from models import Subscription
     subscription = db.query(Subscription).filter(
@@ -241,6 +242,7 @@ async def get_profile(
     
     usage_limits = get_usage_limits(subscription) if subscription else {}
     
+    # FIXED: Return with correct field names matching ProfileResponse
     return ProfileResponse(
         user_id=current_user.user_id,
         email=current_user.email,
@@ -390,3 +392,27 @@ async def list_users(
         "limit": limit,
         "offset": offset
     }
+    
+# ============================================================================
+# Database Endpoints
+# ============================================================================
+@router.get("/health/database")
+async def health_database(db: Session = Depends(get_db)):
+    try:
+        db.execute("SELECT 1")
+        user_count = db.query(User).count()
+        subscription_count = db.query(Subscription).count()
+        
+        return {
+            "status": "healthy",  # Make sure this is "healthy"
+            "connection": "active",
+            "statistics": {
+                "users": user_count,
+                "subscriptions": subscription_count
+            }
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e)
+        }

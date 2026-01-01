@@ -1,53 +1,65 @@
 """
-src/__init__.py - Central Import Configuration
-
-This file ensures all models are properly registered with SQLAlchemy Base
-and provides a clean import interface for the rest of the application.
-
-Place this file at: src/__init__.py
+src package initialization
+Fixed import errors
 """
 
-# Import Base from database (database.py is in src/ directory)
-from .database import Base
+# Import database components
+from .database import engine, SessionLocal, get_db, get_db_context, init_db
 
-# Import all models to register them with Base (models.py is in src/ directory)
-from .models import (
-    User,
-    Subscription,
-    Session,
-    Service,
-    Incident,
-    Action,
-    Anomaly,
-    AuditLog,
-    ApiKey,
-    # Enums
-    SubscriptionStatus,
-    SubscriptionPlan,
-    ActionStatus,
-    IncidentStatus,
-    IncidentSeverity
+# Import models - Base is defined in models.py, not database.py
+from .models import Base, User, Subscription, Session, Service, Incident, Action, Anomaly
+
+# Import authentication
+from .auth import (
+    get_current_user,
+    get_current_active_subscription,
+    require_superuser,
+    create_user,
+    authenticate_user,
+    hash_password,
+    verify_password
+)
+
+# Import subscription service
+from .subscription_service import (
+    create_trial_subscription,
+    upgrade_to_paid,
+    check_feature_access,
+    get_usage_limits,
+    check_subscription_expiry
 )
 
 __all__ = [
-    # Core
-    "Base",
+    # Database
+    'engine',
+    'SessionLocal',
+    'get_db',
+    'get_db_context',
+    'init_db',
     
     # Models
-    "User",
-    "Subscription",
-    "Session",
-    "Service",
-    "Incident",
-    "Action",
-    "Anomaly",
-    "AuditLog",
-    "ApiKey",
+    'Base',
+    'User',
+    'Subscription',
+    'Session',
+    'Service',
+    'Incident',
+    'Action',
+    'Anomaly',
     
-    # Enums
-    "SubscriptionStatus",
-    "SubscriptionPlan",
-    "ActionStatus",
-    "IncidentStatus",
-    "IncidentSeverity"
+    # Auth
+    'get_current_user',
+    'get_current_active_subscription',
+    'require_superuser',
+    'create_user',
+    'authenticate_user',
+    'hash_password',
+    'verify_password',
+    
+    # Subscription
+    'create_trial_subscription',
+    'upgrade_to_paid',
+    'check_feature_access',
+    'get_usage_limits',
+    'check_subscription_expiry',
 ]

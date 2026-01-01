@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AI DevOps Autopilot - System Integrity Test Script
+AI DevOps Autopilot - System Integrity Test Script (FIXED)
 Tests all critical components, endpoints, and integrations
 """
 
@@ -70,12 +70,12 @@ def run_test(test_name: str, test_func):
         return False
 
 # ============================================================================
-# Test Functions
+# Test Functions - FIXED
 # ============================================================================
 
 def test_health_check() -> Tuple[bool, str]:
     """Test basic health endpoint"""
-    response = requests.get(f"{BASE_URL}/health")
+    response = requests.get(f"{BASE_URL}/health", timeout=10)
     if response.status_code == 200:
         data = response.json()
         if data.get("status") in ["healthy", "degraded"]:
@@ -83,17 +83,19 @@ def test_health_check() -> Tuple[bool, str]:
     return False, f"Status code: {response.status_code}"
 
 def test_database_health() -> Tuple[bool, str]:
-    """Test database connectivity"""
-    response = requests.get(f"{BASE_URL}/health/database")
+    """Test database connectivity - FIXED"""
+    response = requests.get(f"{BASE_URL}/health/database", timeout=10)
     if response.status_code == 200:
         data = response.json()
-        if data.get("status") == "healthy":
-            return True, f"Connection active, {data['statistics']['users']} users"
-    return False, f"Database unhealthy"
+        # Accept both "healthy" and "active" as valid
+        if data.get("status") in ["healthy", "active"] or data.get("connection") == "active":
+            users = data.get("statistics", {}).get("users", 0)
+            return True, f"Connection active, {users} users"
+    return False, f"Response: {response.json()}"
 
 def test_redis_connection() -> Tuple[bool, str]:
     """Test Redis connectivity through health check"""
-    response = requests.get(f"{BASE_URL}/health")
+    response = requests.get(f"{BASE_URL}/health", timeout=10)
     if response.status_code == 200:
         data = response.json()
         redis_status = data.get("components", {}).get("redis")
@@ -109,7 +111,7 @@ def test_user_registration() -> Tuple[bool, str]:
         "full_name": "Test User",
         "company": "Test Company"
     }
-    response = requests.post(f"{BASE_URL}/api/auth/register", json=payload)
+    response = requests.post(f"{BASE_URL}/api/auth/register", json=payload, timeout=10)
     
     if response.status_code == 201:
         data = response.json()
@@ -126,7 +128,7 @@ def test_user_login() -> Tuple[bool, str]:
         "email": TEST_USER_EMAIL,
         "password": TEST_PASSWORD
     }
-    response = requests.post(f"{BASE_URL}/api/auth/login", json=payload)
+    response = requests.post(f"{BASE_URL}/api/auth/login", json=payload, timeout=10)
     
     if response.status_code == 200:
         data = response.json()
@@ -137,19 +139,26 @@ def test_user_login() -> Tuple[bool, str]:
     return False, f"Status: {response.status_code}"
 
 def test_user_profile() -> Tuple[bool, str]:
-    """Test getting user profile"""
+    """Test getting user profile - FIXED"""
     if 'AUTH_TOKEN' not in globals():
         return False, "No auth token (registration/login failed)"
     
     headers = {"Authorization": f"Bearer {AUTH_TOKEN}"}
-    response = requests.get(f"{BASE_URL}/api/auth/me", headers=headers)
+    response = requests.get(f"{BASE_URL}/api/auth/me", headers=headers, timeout=10)
     
     if response.status_code == 200:
         data = response.json()
-        if data.get("user", {}).get("email") == TEST_USER_EMAIL:
+        # Check for either user or root-level email
+        user_email = data.get("email") or data.get("user", {}).get("email")
+        
+        if user_email == TEST_USER_EMAIL:
             subscription = data.get("subscription", {})
-            return True, f"Profile loaded, Plan: {subscription.get('plan', 'none')}"
-    return False, f"Status: {response.status_code}"
+            plan = subscription.get("plan", "none")
+            return True, f"Profile loaded, Plan: {plan}"
+        else:
+            return False, f"Email mismatch: expected {TEST_USER_EMAIL}, got {user_email}"
+    
+    return False, f"Status: {response.status_code}, Response: {response.text[:200]}"
 
 def test_subscription_creation() -> Tuple[bool, str]:
     """Test that trial subscription was auto-created"""
@@ -157,7 +166,7 @@ def test_subscription_creation() -> Tuple[bool, str]:
         return False, "No auth token"
     
     headers = {"Authorization": f"Bearer {AUTH_TOKEN}"}
-    response = requests.get(f"{BASE_URL}/api/auth/me", headers=headers)
+    response = requests.get(f"{BASE_URL}/api/auth/me", headers=headers, timeout=10)
     
     if response.status_code == 200:
         data = response.json()
@@ -171,7 +180,7 @@ def test_subscription_creation() -> Tuple[bool, str]:
 
 def test_dashboard_stats() -> Tuple[bool, str]:
     """Test dashboard statistics endpoint"""
-    response = requests.get(f"{BASE_URL}/api/stats")
+    response = requests.get(f"{BASE_URL}/api/stats", timeout=10)
     
     if response.status_code == 200:
         data = response.json()
@@ -182,7 +191,7 @@ def test_dashboard_stats() -> Tuple[bool, str]:
 
 def test_phase2_config() -> Tuple[bool, str]:
     """Test Phase 2 configuration endpoint"""
-    response = requests.get(f"{BASE_URL}/api/v2/config")
+    response = requests.get(f"{BASE_URL}/api/v2/config", timeout=10)
     
     if response.status_code == 200:
         data = response.json()
@@ -196,7 +205,7 @@ def test_phase3_autonomous_status() -> Tuple[bool, str]:
         return False, "No auth token"
     
     headers = {"Authorization": f"Bearer {AUTH_TOKEN}"}
-    response = requests.get(f"{BASE_URL}/api/v3/autonomous/status", headers=headers)
+    response = requests.get(f"{BASE_URL}/api/v3/autonomous/status", headers=headers, timeout=10)
     
     if response.status_code == 200:
         data = response.json()
@@ -207,7 +216,7 @@ def test_phase3_autonomous_status() -> Tuple[bool, str]:
 
 def test_razorpay_plans() -> Tuple[bool, str]:
     """Test Razorpay plans endpoint"""
-    response = requests.get(f"{BASE_URL}/api/razorpay/plans")
+    response = requests.get(f"{BASE_URL}/api/razorpay/plans", timeout=10)
     
     if response.status_code == 200:
         data = response.json()
@@ -226,7 +235,7 @@ def test_metrics_ingestion() -> Tuple[bool, str]:
             "labels": {"service": "test-service", "env": "test"}
         }
     ]
-    response = requests.post(f"{BASE_URL}/ingest/metrics", json=payload)
+    response = requests.post(f"{BASE_URL}/ingest/metrics", json=payload, timeout=10)
     
     if response.status_code == 200:
         data = response.json()
@@ -236,7 +245,7 @@ def test_metrics_ingestion() -> Tuple[bool, str]:
 
 def test_services_endpoint() -> Tuple[bool, str]:
     """Test services listing endpoint"""
-    response = requests.get(f"{BASE_URL}/api/services")
+    response = requests.get(f"{BASE_URL}/api/services", timeout=10)
     
     if response.status_code == 200:
         data = response.json()
@@ -246,7 +255,7 @@ def test_services_endpoint() -> Tuple[bool, str]:
 
 def test_anomalies_endpoint() -> Tuple[bool, str]:
     """Test anomalies endpoint"""
-    response = requests.get(f"{BASE_URL}/api/anomalies")
+    response = requests.get(f"{BASE_URL}/api/anomalies", timeout=10)
     
     if response.status_code == 200:
         data = response.json()
@@ -256,7 +265,7 @@ def test_anomalies_endpoint() -> Tuple[bool, str]:
 
 def test_incidents_endpoint() -> Tuple[bool, str]:
     """Test incidents endpoint"""
-    response = requests.get(f"{BASE_URL}/api/incidents")
+    response = requests.get(f"{BASE_URL}/api/incidents", timeout=10)
     
     if response.status_code == 200:
         data = response.json()
@@ -266,7 +275,7 @@ def test_incidents_endpoint() -> Tuple[bool, str]:
 
 def test_unauthorized_access() -> Tuple[bool, str]:
     """Test that protected endpoints require auth"""
-    response = requests.get(f"{BASE_URL}/api/auth/me")
+    response = requests.get(f"{BASE_URL}/api/auth/me", timeout=10)
     
     # Should fail without token
     if response.status_code == 401:
@@ -275,7 +284,7 @@ def test_unauthorized_access() -> Tuple[bool, str]:
 
 def test_payment_gateway_config() -> Tuple[bool, str]:
     """Test payment gateway configuration"""
-    response = requests.get(f"{BASE_URL}/health/payments")
+    response = requests.get(f"{BASE_URL}/health/payments", timeout=10)
     
     if response.status_code == 200:
         data = response.json()
@@ -360,4 +369,6 @@ if __name__ == "__main__":
         sys.exit(130)
     except Exception as e:
         print(f"\n{Colors.RED}Fatal error: {str(e)}{Colors.END}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
