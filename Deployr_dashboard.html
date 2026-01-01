@@ -1403,7 +1403,7 @@
                             <div class="text-sm opacity-90 mb-2">
                                 <i class="fas fa-percentage mr-1"></i>Avg Confidence
                             </div>
-                            <div class="text-4xl font-bold">${avgConfidence.toFixed(0)} percent</div>
+                            <div class="text-4xl font-bold">${avgConfidence.toFixed(0)}%</div>
                         </div>
                         <div style="background: linear-gradient(135deg, var(--primary), var(--primary-dark));" class="rounded-xl p-6 text-black">
                             <div class="text-sm opacity-90 mb-2">
@@ -1456,6 +1456,39 @@
                     </div>
                 </div>
             `;
+        }
+        
+        function renderHealthMetric(label, value, colorClass) {
+            const colorMap = {
+                'green': 'bg-green-600',
+                'orange': 'bg-orange-600',
+                'red': 'bg-red-600',
+                'primary': 'bg-primary'
+            };
+            
+            const textColorMap = {
+                'green': 'text-green-400',
+                'orange': 'text-orange-400',
+                'red': 'text-red-400',
+                'primary': 'text-primary'
+            };
+            
+            return `
+                <div class="card rounded-lg p-4">
+                    <div class="text-sm text-gray-400 mb-2">${label}</div>
+                    <div class="text-3xl font-bold ${textColorMap[colorClass] || 'text-primary'}">${value}</div>
+                    <div class="w-full ${colorMap[colorClass] || 'bg-primary'} h-1 rounded-full mt-2"></div>
+                </div>
+            `;
+        }
+        
+        function getRiskClass(risk) {
+            const classes = {
+                low: 'bg-green-900/50 text-green-300',
+                medium: 'bg-orange-900/50 text-orange-300',
+                high: 'bg-red-900/50 text-red-300'
+            };
+            return classes[risk] || classes.medium;
         }
         
          function renderNotifications() {

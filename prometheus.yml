@@ -1,0 +1,4 @@
+remote_write:
+  - url: "https://your-deployr.com/prometheus/write"
+    headers:
+      Authorization: "Bearer YOUR_API_KEY"
