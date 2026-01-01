@@ -870,7 +870,7 @@ async def set_autonomous_mode(
     """Change autonomous execution mode (subscription-gated)"""
     try:
         # Check subscription access
-        access = await check_access(current_user.user_id, "autonomous_mode")
+        access = await check_access(current_user.user_id, "autonomous_mode", db)
         
         if not access["allowed"]:
             raise HTTPException(

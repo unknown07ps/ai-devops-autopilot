@@ -12,7 +12,7 @@ from typing import Generator
 # Database URL from environment
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://deployr:deployr_password@localhost:5432/deployr"
+    "postgresql://deployr:deployr1374@localhost:5432/deployr"
 )
 
 # Create engine with connection pooling
