@@ -11,9 +11,9 @@ from sqlalchemy.orm import Session
 import os
 
 # Import from correct modules
-from database import get_db
-from models import Subscription as DBSubscription, SubscriptionStatus, SubscriptionPlan, User
-from subscription_service import check_feature_access as service_check_feature_access
+from src.database import get_db
+from src.models import Subscription as DBSubscription, SubscriptionStatus, SubscriptionPlan, User
+from src.subscription_service import check_feature_access as service_check_feature_access
 
 router = APIRouter(prefix="/api/subscription", tags=["subscription"])
 

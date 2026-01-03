@@ -11,8 +11,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict
 from sqlalchemy.orm import Session
 
-from models import Subscription, SubscriptionStatus, SubscriptionPlan, User
-from subscription_service import upgrade_to_paid, renew_subscription
+from src.models import Subscription, SubscriptionStatus, SubscriptionPlan, User
+from src.subscription_service import upgrade_to_paid, renew_subscription
 
 # ============================================================================
 # Razorpay Configuration with Safety Checks

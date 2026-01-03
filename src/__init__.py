@@ -29,6 +29,9 @@ from .subscription_service import (
     check_subscription_expiry
 )
 
+# Import autonomous executor
+from .autonomous_executor import AutonomousExecutor, ExecutionMode
+
 __all__ = [
     # Database
     'engine',
@@ -62,4 +65,8 @@ __all__ = [
     'check_feature_access',
     'get_usage_limits',
     'check_subscription_expiry',
+    
+    # Autonomous Executor
+    'AutonomousExecutor',
+    'ExecutionMode',
 ]

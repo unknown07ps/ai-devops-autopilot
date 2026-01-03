@@ -65,7 +65,7 @@ def init_db():
     Initialize database - create all tables
     Run this once during deployment
     """
-    from models import Base
+    from src.models import Base
     Base.metadata.create_all(bind=engine)
     print("✅ Database tables created successfully")
 
@@ -74,7 +74,7 @@ def drop_all_tables():
     Drop all tables - USE WITH CAUTION
     Only for development/testing
     """
-    from models import Base
+    from src.models import Base
     Base.metadata.drop_all(bind=engine)
     print("⚠️  All tables dropped")
 

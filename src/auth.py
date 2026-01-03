@@ -13,8 +13,8 @@ from typing import Optional
 import secrets
 import os
 
-from models import User, Session as DBSession, Subscription
-from database import get_db
+from src.models import User, Session as DBSession, Subscription
+from src.database import get_db
 
 # ============================================================================
 # Configuration
@@ -68,19 +68,22 @@ def create_refresh_token(data: dict) -> str:
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def verify_token(token: str, token_type: str = "access") -> Optional[dict]:
-    """Verify and decode JWT token"""
+
+def verify_token(token: str, token_type: str) -> Optional[dict]:
+    """Generic token verification helper"""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        
-        # Check token type
         if payload.get("type") != token_type:
             return None
         
+        # Check expiration
+        exp = payload.get("exp")
+        if exp and datetime.fromtimestamp(exp, tz=timezone.utc) < datetime.now(timezone.utc):
+            return None
+            
         return payload
     except JWTError:
         return None
-
 # ============================================================================
 # User Authentication
 # ============================================================================
@@ -288,7 +291,7 @@ def create_user(
     company = None
 ):
     """Create a new user account"""
-    from models import User
+    from src.models import User
     import secrets
     
     # Check if email already exists
@@ -319,7 +322,7 @@ def create_user(
     db.refresh(user)
     
     # Import here to avoid circular dependency
-    from subscription_service import create_trial_subscription
+    from src.subscription_service import create_trial_subscription
     create_trial_subscription(db, user)
     
     return user
@@ -344,7 +347,7 @@ def verify_password_reset_token(token: str) -> Optional[str]:
 
 def reset_password(db, token: str, new_password: str) -> bool:
     """Reset user password using verified token"""
-    from models import User
+    from src.models import User
     
     # Verify token and get email
     email = verify_password_reset_token(token)
@@ -393,3 +396,27 @@ def verify_email_token(db: Session, token: str) -> bool:
     db.commit()
     
     return True
+
+# ============================================================================
+# Session Management
+# ============================================================================
+
+def revoke_all_sessions(db: Session, user_id: str):
+    """Revoke all sessions for a specific user"""
+    try:
+        db.query(DBSession).filter(DBSession.user_id == user_id).delete()
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Error revoking sessions: {e}")
+
+def cleanup_expired_sessions(db: Session):
+    """Remove expired sessions from the database (Used by main.py)"""
+    try:
+        now = datetime.now(timezone.utc)
+        # Delete sessions where expires_at is in the past
+        db.query(DBSession).filter(DBSession.expires_at < now).delete()
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Error cleaning up sessions: {e}")

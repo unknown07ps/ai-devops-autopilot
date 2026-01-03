@@ -8,7 +8,11 @@ import json
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timezone, time as dt_time
 from enum import Enum
-import redis
+
+try:
+    import redis
+except ImportError:
+    redis = None  # Allow module to load without redis for testing
 
 class ExecutionMode(Enum):
     """Execution modes for autonomous system"""
@@ -36,12 +40,17 @@ class SafetyRail(Enum):
 
 class AutonomousExecutor:
     """
-    Intelligent autonomous executor with hybrid rule + AI decision making
+    Intelligent autonomous executor with hybrid rule + AI + learning decision making
+    Now integrated with Knowledge Base (580+ patterns) and Learning Engine
     """
     
-    def __init__(self, redis_client, action_executor):
+    def __init__(self, redis_client, action_executor, knowledge_base=None, learning_engine=None):
         self.redis = redis_client
         self.action_executor = action_executor
+        
+        # Learning system integration
+        self.knowledge_base = knowledge_base
+        self.learning_engine = learning_engine
         
         # Add lock for thread safety
         self._action_lock = asyncio.Lock()
@@ -62,10 +71,11 @@ class AutonomousExecutor:
         self.action_history = []
         self.last_action_time = {}
         
-        # Learning weights (updated over time)
-        self.rule_weight = 0.4
-        self.ai_weight = 0.4
-        self.historical_weight = 0.2
+        # Learning weights (updated over time based on learning engine)
+        self.rule_weight = 0.35
+        self.ai_weight = 0.35
+        self.historical_weight = 0.15
+        self.pattern_weight = 0.15  # New: weight for pattern-based confidence
     
     async def evaluate_action(
         self,

@@ -7,15 +7,17 @@
     <title>Deployr - AI DevOps Autopilot</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        /* ============================================
+           DEPLOYR PROFESSIONAL DEVOPS UI - GLOWY THEME
+           ============================================ */
+
         @keyframes spin {
             to {
                 transform: rotate(360deg);
             }
-        }
-
-        .animate-spin {
-            animation: spin 1s linear infinite;
         }
 
         @keyframes pulse {
@@ -30,10 +32,6 @@
             }
         }
 
-        .animate-pulse {
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-
         @keyframes slideIn {
             from {
                 transform: translateX(100%);
@@ -44,60 +42,379 @@
             }
         }
 
+        @keyframes glow {
+
+            0%,
+            100% {
+                box-shadow: 0 0 5px var(--primary), 0 0 10px var(--primary-glow);
+            }
+
+            50% {
+                box-shadow: 0 0 15px var(--primary), 0 0 25px var(--primary-glow);
+            }
+        }
+
+        @keyframes borderGlow {
+
+            0%,
+            100% {
+                border-color: var(--primary);
+            }
+
+            50% {
+                border-color: var(--primary-light);
+            }
+        }
+
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
         .slide-in {
             animation: slideIn 0.3s ease-out;
         }
 
-        /* Color palette based on logo */
+        .animate-glow {
+            animation: glow 2s ease-in-out infinite;
+        }
+
+        .animate-border-glow {
+            animation: borderGlow 2s ease-in-out infinite;
+        }
+
+        /* Enhanced Color Palette - Glowy Dark Theme */
         :root {
             --primary: #00BCD4;
             --primary-dark: #0097A7;
             --primary-light: #4DD0E1;
-            --bg-dark: #1A1A1A;
-            --bg-darker: #0F0F0F;
-            --bg-card: #2A2A2A;
+            --primary-glow: rgba(0, 188, 212, 0.4);
+            --bg-dark: #0D1117;
+            --bg-darker: #010409;
+            --bg-card: #161B22;
+            --bg-elevated: #21262D;
             --text-primary: #FFFFFF;
-            --text-secondary: #B0B0B0;
-            --border: #3A3A3A;
+            --text-secondary: #B8C4CE;
+            --text-muted: #64748B;
+            --border: #30363D;
+            --border-glow: rgba(0, 188, 212, 0.3);
+            --success: #22C55E;
+            --success-glow: rgba(34, 197, 94, 0.3);
+            --warning: #F59E0B;
+            --warning-glow: rgba(245, 158, 11, 0.3);
+            --error: #EF4444;
+            --error-glow: rgba(239, 68, 68, 0.3);
+            --info: #3B82F6;
+            --purple: #A855F7;
+        }
+
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: var(--primary) var(--bg-darker);
+        }
+
+        *::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        *::-webkit-scrollbar-track {
+            background: var(--bg-darker);
+        }
+
+        *::-webkit-scrollbar-thumb {
+            background: var(--primary);
+            border-radius: 4px;
         }
 
         body {
-            background-color: var(--bg-dark);
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
             color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
         }
 
-        .bg-primary {
-            background-color: var(--primary);
-        }
-
-        .bg-primary-dark {
-            background-color: var(--primary-dark);
-        }
-
-        .text-primary {
-            color: var(--primary);
-        }
-
-        .border-primary {
-            border-color: var(--primary);
-        }
-
+        /* Card Styles - Glow only on hover */
         .card {
-            background-color: var(--bg-card);
+            background: var(--bg-card);
             border: 1px solid var(--border);
+            transition: all 0.3s ease;
         }
 
+        .card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        .card-glow {
+            background: var(--bg-card);
+            border: 1px solid var(--primary);
+        }
+
+        .card-glow:hover {
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        .card-success {
+            border-color: var(--success);
+        }
+
+        .card-success:hover {
+            box-shadow: 0 0 15px var(--success-glow);
+        }
+
+        .card-warning {
+            border-color: var(--warning);
+        }
+
+        .card-warning:hover {
+            box-shadow: 0 0 15px var(--warning-glow);
+        }
+
+        .card-error {
+            border-color: var(--error);
+        }
+
+        .card-error:hover {
+            box-shadow: 0 0 15px var(--error-glow);
+        }
+
+        /* Buttons - Glow only on hover */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: #000;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 0 20px var(--primary-glow);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: var(--primary);
+            border: 1px solid var(--primary);
+            color: #000;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary:hover {
+            background: var(--primary-light);
+            border-color: var(--primary-light);
+        }
+
+        /* Navigation - Glow only on hover */
         .nav-button {
-            transition: all 0.2s;
+            transition: all 0.3s ease;
+            position: relative;
         }
 
         .nav-button:hover {
-            background-color: rgba(0, 188, 212, 0.1);
+            background: rgba(0, 188, 212, 0.1);
         }
 
         .nav-button.active {
-            background-color: rgba(0, 188, 212, 0.2);
+            background: rgba(0, 188, 212, 0.15);
             border-bottom: 2px solid var(--primary);
+        }
+
+        .nav-button.active:hover {
+            box-shadow: 0 4px 15px -5px var(--primary-glow);
+        }
+
+        .nav-button.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--primary);
+        }
+
+        /* Status Indicators - Clean colors, glow on hover only */
+        .status-healthy {
+            color: var(--success);
+        }
+
+        .status-warning {
+            color: var(--warning);
+        }
+
+        .status-critical {
+            color: var(--error);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            transition: box-shadow 0.3s ease;
+        }
+
+        .status-dot.healthy {
+            background: var(--success);
+        }
+
+        .status-dot.healthy:hover {
+            box-shadow: 0 0 10px var(--success);
+        }
+
+        .status-dot.warning {
+            background: var(--warning);
+        }
+
+        .status-dot.warning:hover {
+            box-shadow: 0 0 10px var(--warning);
+        }
+
+        .status-dot.critical {
+            background: var(--error);
+            animation: pulse 1s infinite;
+        }
+
+        .status-dot.critical:hover {
+            box-shadow: 0 0 10px var(--error);
+        }
+
+        /* Logo - No glow, just the logo image */
+        .logo-glow {
+            transition: transform 0.3s ease;
+        }
+
+        .logo-glow:hover {
+            transform: scale(1.02);
+        }
+
+        /* Metric Cards with Glow */
+        .metric-card {
+            background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-elevated) 100%);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .metric-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px var(--primary-glow);
+            transform: translateY(-2px);
+        }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Chart Container */
+        .chart-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            position: relative;
+        }
+
+        .chart-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary), var(--primary-light), var(--primary));
+            border-radius: 12px 12px 0 0;
+        }
+
+        /* Phase Cards */
+        .phase-card {
+            background: linear-gradient(180deg, var(--bg-card) 0%, rgba(22, 27, 34, 0.8) 100%);
+            border-radius: 16px;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .phase-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+        }
+
+        .phase-card.phase-detection::before {
+            background: var(--info);
+        }
+
+        .phase-card.phase-detection:hover::before {
+            box-shadow: 0 0 15px var(--info);
+        }
+
+        .phase-card.phase-supervised::before {
+            background: var(--purple);
+        }
+
+        .phase-card.phase-supervised:hover::before {
+            box-shadow: 0 0 15px var(--purple);
+        }
+
+        .phase-card.phase-autonomous::before {
+            background: var(--success);
+        }
+
+        .phase-card.phase-autonomous:hover::before {
+            box-shadow: 0 0 15px var(--success);
+        }
+
+        /* Mode Selection Cards - Glow only on hover */
+        .mode-card {
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .mode-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        .mode-card.active {
+            border-color: var(--primary);
+            background: rgba(0, 188, 212, 0.1);
+        }
+
+        .mode-card.active:hover {
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        .mode-card .mode-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--text-muted);
+            transition: all 0.3s ease;
+        }
+
+        .mode-card:hover .mode-icon {
+            color: var(--primary);
+        }
+
+        .mode-card.active .mode-icon {
+            color: var(--primary);
         }
 
         /* Subscription overlay */
@@ -122,12 +439,64 @@
         }
 
         .locked-feature::after {
-            content: '🔒';
+            content: '\f023';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
             font-size: 2rem;
+            color: var(--error);
+            text-shadow: 0 0 20px var(--error-glow);
+        }
+
+        /* Glassmorphism effect */
+        .glass {
+            background: rgba(22, 27, 34, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(48, 54, 61, 0.5);
+        }
+
+        /* Text glow for headings */
+        .text-glow {
+            text-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        .text-glow-success {
+            text-shadow: 0 0 20px var(--success-glow);
+        }
+
+        .text-glow-warning {
+            text-shadow: 0 0 20px var(--warning-glow);
+        }
+
+        .text-glow-error {
+            text-shadow: 0 0 20px var(--error-glow);
+        }
+
+        /* Gradient text */
+        .gradient-text {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Progress bars with glow */
+        .progress-bar {
+            height: 8px;
+            background: var(--bg-elevated);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--primary-light));
+            box-shadow: 0 0 10px var(--primary);
+            border-radius: 4px;
+            transition: width 0.5s ease;
         }
     </style>
 </head>
@@ -135,67 +504,12 @@
 <body>
     <div id="app"></div>
 
-    <!-- Subscription Upgrade Modal -->
-    <div id="upgradeModal" style="display: none;" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-6">
-        <div class="card rounded-xl max-w-md w-full p-8 shadow-2xl">
-            <div class="text-center mb-6">
-                <i class="fas fa-crown text-6xl mb-4" style="color: var(--primary);"></i>
-                <h2 class="text-3xl font-bold mb-2">Upgrade to Pro</h2>
-                <p class="text-gray-400">Continue monitoring with full access</p>
-            </div>
 
-            <div class="bg-black bg-opacity-50 rounded-lg p-6 mb-6 border border-primary">
-                <div class="text-center mb-4">
-                    <div class="text-5xl font-bold mb-2">$99</div>
-                    <div class="text-gray-400">per month</div>
-                </div>
-                
-                <div class="space-y-3 text-sm">
-                    <div class="flex items-center gap-2">
-                        <i class="fas fa-check text-green-500"></i>
-                        <span>AI-powered anomaly detection</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <i class="fas fa-check text-green-500"></i>
-                        <span>Autonomous remediation</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <i class="fas fa-check text-green-500"></i>
-                        <span>Root cause analysis</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <i class="fas fa-check text-green-500"></i>
-                        <span>24/7 Slack alerts</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <i class="fas fa-check text-green-500"></i>
-                        <span>Learning & pattern recognition</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <i class="fas fa-check text-green-500"></i>
-                        <span>Unlimited monitored services</span>
-                    </div>
-                </div>
-            </div>
-
-            <button onclick="handleUpgrade()" class="w-full bg-primary hover:bg-primary-dark text-black py-4 rounded-lg font-bold text-lg mb-3 transition">
-                <i class="fas fa-credit-card mr-2"></i>Upgrade Now
-            </button>
-            
-            <button onclick="closeUpgradeModal()" class="w-full bg-gray-700 hover:bg-gray-600 py-3 rounded-lg font-semibold transition">
-                Maybe Later
-            </button>
-
-            <p class="text-xs text-gray-500 text-center mt-4">
-                Cancel anytime. No hidden fees.
-            </p>
-        </div>
-    </div>
 
     <script>
         const API_BASE = 'http://localhost:8000';
         const CURRENT_USER_ID = 'demo_user_123'; // Replace with actual auth
-        
+
         let currentView = 'control-center';
         let autoRefresh = false;
         let refreshInterval = null;
@@ -218,18 +532,16 @@
         };
 
         // ============================================================================
-        // SUBSCRIPTION MANAGEMENT
+        // SUBSCRIPTION MANAGEMENT (Keep existing - no changes)
         // ============================================================================
-        
+
         async function initializeSubscription() {
             try {
-                // Try to get from API
                 const response = await fetch(`${API_BASE}/api/subscription/status/${CURRENT_USER_ID}`);
-                
+
                 if (response.ok) {
                     subscription = await response.json();
                 } else {
-                    // Create trial if doesn't exist
                     const signupRes = await fetch(`${API_BASE}/api/subscription/signup`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -238,18 +550,16 @@
                             email: 'demo@deployr.com'
                         })
                     });
-                    
+
                     if (signupRes.ok) {
                         subscription = await signupRes.json();
                     } else {
-                        // Fallback to localStorage
                         subscription = getLocalSubscription();
                     }
                 }
-                
-                // Check expiration
+
                 checkSubscriptionExpiration();
-                
+
             } catch (error) {
                 console.error('Subscription init error:', error);
                 subscription = getLocalSubscription();
@@ -258,11 +568,11 @@
 
         function getLocalSubscription() {
             let sub = localStorage.getItem('deployr_subscription');
-            
+
             if (!sub) {
                 const now = new Date();
                 const trialEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-                
+
                 sub = {
                     user_id: CURRENT_USER_ID,
                     plan: 'pro',
@@ -272,12 +582,12 @@
                     current_period_end: trialEnd.toISOString(),
                     created_at: now.toISOString()
                 };
-                
+
                 localStorage.setItem('deployr_subscription', JSON.stringify(sub));
             } else {
                 sub = JSON.parse(sub);
             }
-            
+
             return sub;
         }
 
@@ -285,7 +595,7 @@
             if (subscription.status === 'trialing') {
                 const now = new Date();
                 const trialEnd = new Date(subscription.trial_end);
-                
+
                 if (now > trialEnd) {
                     subscription.status = 'expired';
                     localStorage.setItem('deployr_subscription', JSON.stringify(subscription));
@@ -295,18 +605,18 @@
 
         function getDaysRemaining() {
             if (!subscription || subscription.status !== 'trialing') return 0;
-            
+
             const now = new Date();
             const trialEnd = new Date(subscription.trial_end);
             const diffTime = trialEnd - now;
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
+
             return Math.max(0, diffDays);
         }
 
         function isFeatureAllowed(feature) {
             if (!subscription) return false;
-            
+
             const allowedFeatures = {
                 'dashboard_view': ['trialing', 'active', 'expired', 'canceled'],
                 'incidents_read': ['trialing', 'active', 'expired', 'canceled'],
@@ -315,7 +625,7 @@
                 'slack_alerts': ['trialing', 'active'],
                 'autonomous_mode': ['trialing', 'active']
             };
-            
+
             return allowedFeatures[feature]?.includes(subscription.status) || false;
         }
 
@@ -329,7 +639,6 @@
 
         async function handleUpgrade() {
             try {
-                // Simulate payment (integrate Stripe here)
                 const response = await fetch(`${API_BASE}/api/subscription/upgrade`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -339,63 +648,57 @@
                         payment_method_id: 'pm_demo123'
                     })
                 });
-                
+
                 if (response.ok) {
                     subscription = await response.json();
                     localStorage.setItem('deployr_subscription', JSON.stringify(subscription));
                     closeUpgradeModal();
-                    
-                    // Show success message
-                    showNotification('🎉 Welcome to Deployr Pro!', 'success');
-                    
-                    // Refresh page to enable features
+                    showNotification('Welcome to Deployr Pro!', 'success');
                     setTimeout(() => render(), 500);
                 } else {
                     showNotification('Upgrade failed. Please try again.', 'error');
                 }
             } catch (error) {
-                // Fallback for demo
                 const now = new Date();
                 const nextBilling = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-                
+
                 subscription.status = 'active';
                 subscription.current_period_end = nextBilling.toISOString();
                 localStorage.setItem('deployr_subscription', JSON.stringify(subscription));
-                
+
                 closeUpgradeModal();
-                showNotification('🎉 Upgraded to Pro! (Demo mode)', 'success');
+                showNotification('Upgraded to Pro! (Demo mode)', 'success');
                 setTimeout(() => render(), 500);
             }
         }
 
         function showNotification(message, type) {
             const notif = document.createElement('div');
-            notif.className = `fixed top-6 right-6 z-50 p-4 rounded-lg shadow-2xl slide-in ${
-                type === 'success' ? 'bg-green-600' : 'bg-red-600'
-            }`;
+            notif.className = `fixed top-6 right-6 z-50 p-4 rounded-lg shadow-2xl slide-in ${type === 'success' ? 'bg-green-600' : 'bg-red-600'
+                }`;
             notif.innerHTML = `
                 <div class="flex items-center gap-3">
                     <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} text-2xl"></i>
                     <span class="font-semibold">${message}</span>
                 </div>
             `;
-            
+
             document.body.appendChild(notif);
-            
+
             setTimeout(() => {
                 notif.remove();
             }, 3000);
         }
 
         // ============================================================================
-        // EXISTING DASHBOARD CODE (WITH SUBSCRIPTION CHECKS)
+        // DATA FETCHING (Keep existing - no changes)
         // ============================================================================
 
         async function fetchAllData() {
             try {
                 const [
                     statsRes, incidentsRes, anomaliesRes, servicesRes,
-                    pendingRes, historyRes, learningRes,
+                    pendingRes, historyRes, learningRes, learningStatsV5Res,
                     autoStatusRes, safetyRes, outcomesRes
                 ] = await Promise.all([
                     fetch(`${API_BASE}/api/stats`).catch(() => null),
@@ -405,9 +708,10 @@
                     fetch(`${API_BASE}/api/v2/actions/pending`).catch(() => null),
                     fetch(`${API_BASE}/api/v2/actions/history?limit=30`).catch(() => null),
                     fetch(`${API_BASE}/api/v2/learning/stats`).catch(() => null),
-                    fetch(`${API_BASE}/api/v3/autonomous/status`).catch(() => null),
-                    fetch(`${API_BASE}/api/v3/autonomous/safety-status`).catch(() => null),
-                    fetch(`${API_BASE}/api/v3/autonomous/outcomes?limit=30`).catch(() => null)
+                    fetch(`${API_BASE}/api/v5/learning/stats`).catch(() => null),
+                    fetch(`${API_BASE}/api/v3/autonomous/status/public`).catch(() => null),
+                    fetch(`${API_BASE}/api/v3/autonomous/safety-status/public`).catch(() => null),
+                    fetch(`${API_BASE}/api/v3/autonomous/outcomes/public?limit=30`).catch(() => null)
                 ]);
 
                 if (statsRes?.ok) state.stats = await statsRes.json();
@@ -417,6 +721,23 @@
                 if (pendingRes?.ok) state.pendingActions = (await pendingRes.json()).actions || [];
                 if (historyRes?.ok) state.actionHistory = (await historyRes.json()).actions || [];
                 if (learningRes?.ok) state.learningStats = await learningRes.json();
+
+                // Merge V5 learning stats (comprehensive knowledge base stats)
+                if (learningStatsV5Res?.ok) {
+                    const v5Stats = await learningStatsV5Res.json();
+                    if (!v5Stats.error) {
+                        state.learningStats = {
+                            ...state.learningStats,
+                            total_patterns: v5Stats.knowledge_base?.total_patterns || 580,
+                            autonomous_safe: v5Stats.knowledge_base?.autonomous_safe_count || 45,
+                            by_category: v5Stats.knowledge_base?.by_category || {},
+                            success_rate: v5Stats.learning_engine?.success_rate || 94,
+                            patterns_promoted: v5Stats.learning_engine?.patterns_promoted || 12,
+                            patterns_demoted: v5Stats.learning_engine?.patterns_demoted || 0
+                        };
+                    }
+                }
+
                 if (autoStatusRes?.ok) state.autonomousStatus = await autoStatusRes.json();
                 if (safetyRes?.ok) state.safetyStatus = await safetyRes.json();
                 if (outcomesRes?.ok) {
@@ -431,6 +752,22 @@
                 state.loading = false;
                 renderError(error.message);
             }
+        }
+
+        // Helper function for pattern category badges
+        function renderPatternCategoryBadge(category, icon, color, count) {
+            return `
+                <div class="bg-black bg-opacity-40 rounded-lg p-3 border hover:scale-105 transition cursor-pointer" 
+                     style="border-color: ${color}40;" 
+                     onmouseover="this.style.borderColor='${color}80'" 
+                     onmouseout="this.style.borderColor='${color}40'">
+                    <div class="flex items-center gap-2">
+                        <i class="fas ${icon}" style="color: ${color};"></i>
+                        <span class="text-xs text-gray-400 capitalize">${category}</span>
+                    </div>
+                    <div class="text-xl font-bold text-white mt-1">${count}</div>
+                </div>
+            `;
         }
 
         function toggleAutoRefresh() {
@@ -448,6 +785,10 @@
             state.selectedIncident = null;
             state.selectedAction = null;
             render();
+            // Reinitialize charts when switching to control-center
+            if (view === 'control-center') {
+                initializeCharts();
+            }
         }
 
         function renderError(message) {
@@ -493,18 +834,18 @@
 
         function renderSubscriptionBanner() {
             if (!subscription) return '';
-            
+
             const daysRemaining = getDaysRemaining();
-            
+
             // Trial active
             if (subscription.status === 'trialing') {
                 return `
                     <div class="bg-gradient-to-r from-cyan-600 to-blue-600 p-4 text-center">
                         <div class="max-w-7xl mx-auto flex items-center justify-between">
                             <div class="flex items-center gap-3">
-                                <i class="fas fa-clock text-2xl"></i>
+                                <i class="fas fa-hourglass-half text-2xl"></i>
                                 <span class="font-bold text-lg">
-                                    ⏳ ${daysRemaining} ${daysRemaining === 1 ? 'Day' : 'Days'} Left in Free Trial
+                                    <i class="fas fa-hourglass-start mr-1"></i>${daysRemaining} ${daysRemaining === 1 ? 'Day' : 'Days'} Left in Free Trial
                                 </span>
                             </div>
                             <button onclick="showUpgradeModal()" class="bg-white text-cyan-600 px-6 py-2 rounded-lg font-bold hover:bg-gray-100 transition">
@@ -514,7 +855,7 @@
                     </div>
                 `;
             }
-            
+
             // Trial expired
             if (subscription.status === 'expired') {
                 return `
@@ -523,7 +864,7 @@
                             <div class="flex items-center gap-3">
                                 <i class="fas fa-lock text-2xl text-red-400"></i>
                                 <span class="font-bold text-lg">
-                                    🔒 Your trial has expired. Upgrade to continue monitoring.
+                                    <i class="fas fa-lock mr-1"></i>Your trial has expired. Upgrade to continue monitoring.
                                 </span>
                             </div>
                             <button onclick="showUpgradeModal()" class="bg-red-600 hover:bg-red-700 px-6 py-2 rounded-lg font-bold transition">
@@ -533,7 +874,7 @@
                     </div>
                 `;
             }
-            
+
             // Active subscription
             if (subscription.status === 'active') {
                 return `
@@ -547,7 +888,7 @@
                     </div>
                 `;
             }
-            
+
             return '';
         }
 
@@ -555,58 +896,59 @@
             const pendingCount = state.pendingActions?.length || 0;
             const criticalIncidents = state.incidents?.filter(i => i.severity === 'critical').length || 0;
             const autoMode = state.autonomousStatus?.execution_mode || 'manual';
-            
+
             // Check if premium features are locked
             const isPremiumLocked = !isFeatureAllowed('auto_remediation');
-            
+
             return `
-                <div class="card border-b sticky top-0 z-40 backdrop-blur-sm" style="background-color: rgba(42, 42, 42, 0.95);">
-                    <div class="max-w-7xl mx-auto px-6 py-4">
+                <div class="glass border-b z-40" style="border-color: var(--border);">
+                    <div class="max-w-7xl mx-auto px-6 py-5">
                        <!-- Branding Section -->
-                        <div class="flex items-center gap-4 mb-6">
-                            <div class="flex items-center gap-4 mb-6">
-                                <img src="img/deployr_logo.png" class="h-20 w-20 object-contain" />
+                        <div class="flex items-center justify-between mb-6">
+                            <div class="flex items-center gap-5">
+                                <img src="img/deployr_logo.png" class="h-28 w-28 object-contain logo-glow" alt="Deployr Logo" />
+                                <div>
+                                    <h1 class="text-4xl font-bold tracking-wide" style="color: var(--text-primary);">Deployr</h1>
+                                    <p class="text-base" style="color: var(--text-secondary);">AI-Powered DevOps Autopilot</p>
+                                </div>
                             </div>
-                            <div>
-                                <h1 class="text-3xl font-bold tracking-wide">Deployr</h1>
-                                <p class="text-base text-gray-400">We watch so you don't have to.</p>
-                            </div>
-                            ${isPremiumLocked ? `
-                                <div class="ml-auto">
-                                    <button onclick="switchView('subscription')" class="bg-yellow-600 hover:bg-yellow-700 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition">
+                            <div class="flex items-center gap-4">
+                                ${isPremiumLocked ? `
+                                    <button onclick="switchView('subscription')" class="btn-secondary px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2">
                                         <i class="fas fa-crown"></i>
-                                        View Subscription
+                                        Upgrade to Pro
+                                    </button>
+                                ` : ''}
+                                <div class="flex items-center gap-3">
+                                    <button onclick="toggleAutoRefresh()" class="${autoRefresh ? 'btn-primary' : 'btn-secondary'} px-4 py-2.5 rounded-lg font-medium text-sm flex items-center gap-2">
+                                        <span class="status-dot ${autoRefresh ? 'healthy' : ''}"></span>
+                                        ${autoRefresh ? 'Live' : 'Paused'}
+                                    </button>
+                                    <button onclick="fetchAllData()" class="btn-primary px-4 py-2.5 rounded-lg font-medium text-sm flex items-center gap-2">
+                                        <i class="fas fa-sync-alt"></i>
+                                        Refresh
                                     </button>
                                 </div>
-                            ` : ''}
+                            </div>
                         </div>
 
-                        <!-- Functional Controls -->
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="flex items-center gap-3">
+                        <!-- Mode & Status Bar -->
+                        <div class="flex items-center justify-between mb-5">
+                            <div class="flex items-center gap-4">
                                 ${renderModeIndicator(autoMode, isPremiumLocked)}
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <button onclick="toggleAutoRefresh()" class="${autoRefresh ? 'bg-green-600 hover:bg-green-700' : 'card hover:bg-opacity-80'} px-4 py-2 rounded-lg font-medium transition text-sm">
-                                    <i class="fas ${autoRefresh ? 'fa-sync fa-spin' : 'fa-pause'} mr-2"></i>
-                                    ${autoRefresh ? 'Live' : 'Paused'}
-                                </button>
-                                <button onclick="fetchAllData()" class="bg-primary hover:bg-primary-dark text-black px-4 py-2 rounded-lg font-medium transition text-sm">
-                                    <i class="fas fa-sync mr-2"></i>Refresh
-                                </button>
                             </div>
                         </div>
 
                         <!-- Stats Grid -->
-                        <div class="grid grid-cols-4 gap-3 mb-4">
-                            ${renderQuickStat('fa-exclamation-circle', 'Critical', criticalIncidents, criticalIncidents > 0 ? 'text-red-400' : 'text-gray-400')}
-                            ${renderQuickStat('fa-clock', 'Pending', pendingCount, pendingCount > 0 ? 'text-orange-400' : 'text-gray-400')}
-                            ${renderQuickStat('fa-check-circle', 'Success', state.outcomes.filter(o => o.success).length, 'text-green-400')}
-                            ${renderQuickStat('fa-heartbeat', 'Healthy', state.stats?.healthy_services || 0, 'text-green-400')}
+                        <div class="grid grid-cols-4 gap-4 mb-5">
+                            ${renderQuickStat('fa-exclamation-circle', 'Critical Alerts', criticalIncidents, criticalIncidents > 0 ? 'error' : 'muted')}
+                            ${renderQuickStat('fa-clock', 'Pending Actions', pendingCount, pendingCount > 0 ? 'warning' : 'muted')}
+                            ${renderQuickStat('fa-check-circle', 'Successful', state.outcomes.filter(o => o.success).length, 'success')}
+                            ${renderQuickStat('fa-heartbeat', 'Healthy Services', state.stats?.healthy_services || 0, 'success')}
                         </div>
 
                         <!-- Navigation -->
-                        <div class="flex gap-2 overflow-x-auto pb-2">
+                        <div class="flex gap-1 overflow-x-auto pb-2">
                             ${renderNavButton('control-center', 'fa-th-large', 'Control Center')}
                             ${renderNavButton('incidents', 'fa-exclamation-triangle', 'Incidents', criticalIncidents)}
                             ${renderNavButton('actions', 'fa-bolt', 'Actions', pendingCount, isPremiumLocked)}
@@ -652,13 +994,32 @@
             `;
         }
 
-        function renderQuickStat(icon, label, value, colorClass) {
+        function renderQuickStat(icon, label, value, statusType) {
+            const statusClasses = {
+                success: 'status-healthy',
+                warning: 'status-warning',
+                error: 'status-critical',
+                muted: ''
+            };
+            const glowClasses = {
+                success: 'card-success',
+                warning: 'card-warning',
+                error: 'card-error',
+                muted: ''
+            };
+            const statusClass = statusClasses[statusType] || '';
+            const glowClass = value > 0 ? (glowClasses[statusType] || '') : '';
+
             return `
-                <div class="card rounded-lg px-4 py-2 flex items-center gap-3">
-                    <i class="fas ${icon} text-2xl ${colorClass}"></i>
-                    <div>
-                        <div class="text-xs text-gray-400">${label}</div>
-                        <div class="text-xl font-bold ${colorClass}">${value}</div>
+                <div class="metric-card ${glowClass}">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background: var(--bg-elevated);">
+                            <i class="fas ${icon} text-xl ${statusClass}"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs uppercase tracking-wider" style="color: var(--text-muted);">${label}</div>
+                            <div class="text-2xl font-bold ${statusClass}">${value}</div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -698,142 +1059,182 @@
 
         function renderSubscriptionView() {
             if (!subscription) return '<div class="text-center">Loading subscription...</div>';
-            
+
             const daysRemaining = getDaysRemaining();
             const isTrialing = subscription.status === 'trialing';
             const isActive = subscription.status === 'active';
             const isExpired = subscription.status === 'expired';
-            
+            const currentPlan = subscription.plan || 'free';
+
             return `
-                <div class="space-y-6">
-                    <h2 class="text-3xl font-bold mb-6 flex items-center gap-3">
-                        <i class="fas fa-crown text-yellow-500"></i>
-                        Subscription Management
-                    </h2>
-
-                    <!-- Current Status Card -->
-                    <div class="card rounded-xl p-8 ${
-                        isActive ? 'border-2 border-green-600' :
-                        isTrialing ? 'border-2 border-cyan-600' :
-                        'border-2 border-red-600'
-                    }">
-                        <div class="flex items-start justify-between mb-6">
-                            <div>
-                                <div class="flex items-center gap-3 mb-2">
-                                    <i class="fas ${
-                                        isActive ? 'fa-check-circle text-green-500' :
-                                        isTrialing ? 'fa-clock text-cyan-500' :
-                                        'fa-lock text-red-500'
-                                    } text-3xl"></i>
-                                    <h3 class="text-2xl font-bold capitalize">${subscription.status} ${isActive ? 'Pro' : isTrialing ? 'Trial' : ''} Plan</h3>
-                                </div>
-                                <p class="text-gray-400">
-                                    ${isTrialing ? `${daysRemaining} days remaining in your trial` :
-                                      isActive ? `Next billing: ${new Date(subscription.current_period_end).toLocaleDateString()}` :
-                                      'Your trial has ended'}
-                                </p>
-                            </div>
-                            ${!isActive ? `
-                                <button onclick="showUpgradeModal()" class="bg-primary hover:bg-primary-dark text-black px-6 py-3 rounded-lg font-bold transition">
-                                    <i class="fas fa-arrow-up mr-2"></i>Upgrade Now
-                                </button>
-                            ` : ''}
-                        </div>
-
-                        <div class="grid grid-cols-3 gap-4 mb-6">
-                            <div class="bg-black bg-opacity-50 rounded-lg p-4">
-                                <div class="text-sm text-gray-400 mb-1">Status</div>
-                                <div class="text-xl font-bold capitalize">${subscription.status}</div>
-                            </div>
-                            <div class="bg-black bg-opacity-50 rounded-lg p-4">
-                                <div class="text-sm text-gray-400 mb-1">Plan</div>
-                                <div class="text-xl font-bold">Pro</div>
-                            </div>
-                            <div class="bg-black bg-opacity-50 rounded-lg p-4">
-                                <div class="text-sm text-gray-400 mb-1">Started</div>
-                                <div class="text-xl font-bold">${new Date(subscription.created_at).toLocaleDateString()}</div>
-                            </div>
-                        </div>
-
-                        ${isExpired ? `
-                            <div class="bg-red-900/20 border border-red-600/50 rounded-lg p-4">
-                                <div class="flex items-start gap-3">
-                                    <i class="fas fa-exclamation-circle text-red-500 text-xl mt-1"></i>
-                                    <div>
-                                        <div class="font-bold mb-1">Premium Features Paused</div>
-                                        <p class="text-sm text-gray-300">
-                                            Your AI monitoring, auto-remediation, and alerts are currently disabled. 
-                                            Dashboard and incident history remain accessible.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        ` : ''}
+                <div class="relative -mx-6 -mt-6 px-6 pt-6 pb-12 min-h-screen" style="
+                    background: 
+                        radial-gradient(ellipse at 20% 20%, rgba(0, 188, 212, 0.06) 0%, transparent 50%),
+                        radial-gradient(ellipse at 80% 30%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
+                        linear-gradient(180deg, var(--bg-dark) 0%, #0a0a0f 100%);
+                ">
+                    <!-- Header -->
+                    <div class="text-center mb-12 relative">
+                        <h2 class="text-5xl font-bold mb-3" style="color: #FFFFFF;">
+                            Ascend to Royalty
+                        </h2>
+                        <p class="text-xl" style="color: var(--text-secondary);">Unlock Exclusive DevOps Privileges</p>
                     </div>
 
-                    <!-- Feature Access Matrix -->
-                    <div class="card rounded-xl p-6">
-                        <h3 class="text-xl font-bold mb-4">
-                            <i class="fas fa-list-check text-primary mr-2"></i>Feature Access
-                        </h3>
+                    <!-- Pricing Cards -->
+                    <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
                         
-                        <div class="space-y-3">
-                            ${renderFeatureRow('Dashboard & Incident History', true, 'Always available')}
-                            ${renderFeatureRow('AI Anomaly Detection', !isExpired, isExpired ? 'Requires active subscription' : 'Enabled')}
-                            ${renderFeatureRow('Auto-Remediation Actions', !isExpired, isExpired ? 'Requires active subscription' : 'Enabled')}
-                            ${renderFeatureRow('AI Root Cause Analysis', !isExpired, isExpired ? 'Requires active subscription' : 'Enabled')}
-                            ${renderFeatureRow('Slack Alerts', !isExpired, isExpired ? 'Requires active subscription' : 'Enabled')}
-                            ${renderFeatureRow('Autonomous Mode (Phase 3)', !isExpired, isExpired ? 'Requires active subscription' : 'Enabled')}
-                            ${renderFeatureRow('Learning & Pattern Recognition', !isExpired, isExpired ? 'Requires active subscription' : 'Enabled')}
+                        <!-- Scout Plan - Free -->
+                        <div class="relative rounded-2xl p-6 transition-all duration-300 hover:scale-105" style="
+                            background: linear-gradient(180deg, rgba(30, 35, 45, 0.9) 0%, rgba(20, 25, 30, 0.95) 100%);
+                            border: 1px solid rgba(100, 100, 100, 0.3);
+                        ">
+                            <div class="mb-6">
+                                <h3 class="text-2xl font-bold mb-2" style="color: #FFFFFF;">Essential</h3>
+                                <div class="flex items-baseline gap-1">
+                                    <span class="text-4xl font-bold" style="color: var(--primary);">Free</span>
+                                    <span class="text-sm" style="color: var(--text-muted);">/forever</span>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-3 mb-8">
+                                ${renderPlanFeature('fa-eye', 'Incident Detection', true)}
+                                ${renderPlanFeature('fa-chart-line', 'Basic Dashboard', true)}
+                                ${renderPlanFeature('fa-history', 'Incident History (7 days)', true)}
+                                ${renderPlanFeature('fa-server', 'Up to 3 Services', true)}
+                                ${renderPlanFeature('fa-user-check', 'Supervised Mode Only', true)}
+                                ${renderPlanFeature('fa-brain', 'AI Analysis', false)}
+                                ${renderPlanFeature('fa-robot', 'Auto-Remediation', false)}
+                                ${renderPlanFeature('fa-graduation-cap', 'Pattern Learning', false)}
+                            </div>
+                            
+                            <button class="w-full py-3 rounded-xl font-bold transition" style="
+                                background: rgba(100, 100, 100, 0.3);
+                                border: 1px solid rgba(100, 100, 100, 0.5);
+                                color: var(--text-secondary);
+                            " ${currentPlan === 'free' ? 'disabled' : ''}>
+                                ${currentPlan === 'free' ? 'Current Plan' : 'Downgrade'}
+                            </button>
+                        </div>
+
+                        <!-- Baron Plan - $199 (Most Popular) -->
+                        <div class="relative rounded-2xl p-6 transition-all duration-300 hover:scale-105" style="
+                            background: linear-gradient(180deg, rgba(30, 35, 45, 0.95) 0%, rgba(20, 25, 30, 0.98) 100%);
+                            border: 2px solid var(--primary);
+                            box-shadow: 0 0 30px rgba(0, 188, 212, 0.3), 0 0 60px rgba(0, 188, 212, 0.15);
+                        ">
+                            <!-- Most Popular Badge -->
+                            <div class="absolute -top-3 right-6 px-4 py-1 rounded-full text-xs font-bold" style="
+                                background: var(--primary);
+                                color: #000;
+                            ">Most Popular</div>
+                            
+                            <div class="mb-6">
+                                <h3 class="text-2xl font-bold mb-2" style="color: #FFFFFF;">Advanced</h3>
+                                <div class="flex items-baseline gap-1">
+                                    <span class="text-lg" style="color: var(--text-muted);">$</span>
+                                    <span class="text-4xl font-bold" style="color: var(--primary);">199</span>
+                                    <span class="text-sm" style="color: var(--text-muted);">/month</span>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-3 mb-8">
+                                ${renderPlanFeature('fa-eye', 'Incident Detection', true)}
+                                ${renderPlanFeature('fa-chart-line', 'Advanced Dashboard', true)}
+                                ${renderPlanFeature('fa-history', 'Incident History (30 days)', true)}
+                                ${renderPlanFeature('fa-server', 'Up to 15 Services', true)}
+                                ${renderPlanFeature('fa-brain', 'AI Root Cause Analysis', true)}
+                                ${renderPlanFeature('fa-robot', 'Auto-Remediation', true)}
+                                ${renderPlanFeature('fa-graduation-cap', 'Pattern Learning', true)}
+                                ${renderPlanFeature('fa-bell', 'Slack & Email Alerts', true)}
+                                ${renderPlanFeature('fa-shield-alt', 'Autonomous Mode', true)}
+                                ${renderPlanFeature('fa-clock', '1,000 Actions/month', true)}
+                                ${renderPlanFeature('fa-globe', 'Single Region', true)}
+                            </div>
+                            
+                            <button onclick="handleUpgrade('baron')" class="w-full py-3 rounded-xl font-bold transition" style="
+                                background: var(--primary);
+                                color: #000;
+                            ">
+                                <i class="fas fa-rocket mr-2"></i>Deploy Now
+                            </button>
+                        </div>
+
+                        <!-- King Plan - $499 -->
+                        <div class="relative rounded-2xl p-6 transition-all duration-300 hover:scale-105 overflow-hidden" style="
+                            background: linear-gradient(180deg, rgba(60, 60, 70, 0.6) 0%, rgba(40, 40, 50, 0.8) 100%);
+                            border: 1px solid rgba(180, 180, 200, 0.4);
+                        ">
+                            <!-- Silver shine effect -->
+                            <div style="position: absolute; top: 0; left: 0; right: 0; height: 80px; background: linear-gradient(180deg, rgba(200, 200, 220, 0.15) 0%, transparent 100%); pointer-events: none;"></div>
+                            
+                            <div class="mb-6 relative">
+                                <h3 class="text-2xl font-bold mb-2" style="color: #FFFFFF;">Ultimate</h3>
+                                <div class="flex items-baseline gap-1">
+                                    <span class="text-lg" style="color: var(--text-muted);">$</span>
+                                    <span class="text-4xl font-bold" style="background: linear-gradient(135deg, #FFFFFF 0%, #A0A0B0 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">499</span>
+                                    <span class="text-sm" style="color: var(--text-muted);">/month</span>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-3 mb-8 relative">
+                                <div class="text-sm font-semibold mb-2" style="color: var(--primary);">All Baron Features with Higher Limits:</div>
+                                ${renderPlanFeature('fa-infinity', 'Unlimited Services', true)}
+                                ${renderPlanFeature('fa-history', 'Incident History (Unlimited)', true)}
+                                ${renderPlanFeature('fa-clock', 'Unlimited Actions/month', true)}
+                                ${renderPlanFeature('fa-globe', 'Multi-Region (Up to 5)', true)}
+                                ${renderPlanFeature('fa-code-branch', 'Custom Runbooks', true)}
+                                ${renderPlanFeature('fa-user-tie', 'Dedicated Account Manager', true)}
+                                ${renderPlanFeature('fa-file-alt', 'Compliance Reports (SOC2, HIPAA)', true)}
+                                ${renderPlanFeature('fa-headset', '24/7 Priority Support', true)}
+                                ${renderPlanFeature('fa-lock', 'SSO & RBAC', true)}
+                            </div>
+                            
+                            <button onclick="handleUpgrade('king')" class="w-full py-3 rounded-xl font-bold transition" style="
+                                background: linear-gradient(135deg, rgba(180, 180, 200, 0.3) 0%, rgba(120, 120, 140, 0.3) 100%);
+                                border: 1px solid rgba(180, 180, 200, 0.5);
+                                color: #FFFFFF;
+                            ">
+                                <i class="fas fa-crown mr-2"></i>Claim Throne
+                            </button>
                         </div>
                     </div>
 
-                    <!-- Pricing Info -->
-                    ${!isActive ? `
-                        <div class="card rounded-xl p-6 border-2 border-primary">
-                            <div class="flex items-start justify-between">
-                                <div class="flex-1">
-                                    <h3 class="text-2xl font-bold mb-2">Deployr Pro</h3>
-                                    <div class="text-4xl font-bold mb-4 text-primary">$99<span class="text-lg text-gray-400">/month</span></div>
-                                    
-                                    <div class="grid grid-cols-2 gap-4 mb-6">
-                                        <div class="flex items-start gap-2">
-                                            <i class="fas fa-check text-green-500 mt-1"></i>
-                                            <div>
-                                                <div class="font-semibold">Unlimited Monitoring</div>
-                                                <div class="text-sm text-gray-400">Monitor all your services</div>
-                                            </div>
-                                        </div>
-                                        <div class="flex items-start gap-2">
-                                            <i class="fas fa-check text-green-500 mt-1"></i>
-                                            <div>
-                                                <div class="font-semibold">AI-Powered Analysis</div>
-                                                <div class="text-sm text-gray-400">Root cause detection</div>
-                                            </div>
-                                        </div>
-                                        <div class="flex items-start gap-2">
-                                            <i class="fas fa-check text-green-500 mt-1"></i>
-                                            <div>
-                                                <div class="font-semibold">Auto-Remediation</div>
-                                                <div class="text-sm text-gray-400">Automatic fixes</div>
-                                            </div>
-                                        </div>
-                                        <div class="flex items-start gap-2">
-                                            <i class="fas fa-check text-green-500 mt-1"></i>
-                                            <div>
-                                                <div class="font-semibold">24/7 Alerts</div>
-                                                <div class="text-sm text-gray-400">Slack notifications</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <button onclick="showUpgradeModal()" class="bg-primary hover:bg-primary-dark text-black px-8 py-4 rounded-lg font-bold text-lg transition">
-                                        <i class="fas fa-rocket mr-2"></i>Upgrade to Pro
-                                    </button>
-                                </div>
+                    <!-- FAQ Section -->
+                    <div class="max-w-4xl mx-auto" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 32px;">
+                        <h3 class="text-2xl font-bold mb-6">Frequently Asked Questions</h3>
+                        <div class="space-y-4">
+                            <div class="p-4 rounded-lg" style="background: var(--bg-dark);">
+                                <div class="font-bold mb-2"><i class="fas fa-question-circle text-primary mr-2"></i>Can I switch plans anytime?</div>
+                                <p style="color: var(--text-secondary);">Yes! You can upgrade or downgrade your plan at any time. Changes take effect immediately.</p>
+                            </div>
+                            <div class="p-4 rounded-lg" style="background: var(--bg-dark);">
+                                <div class="font-bold mb-2"><i class="fas fa-question-circle text-primary mr-2"></i>What happens to my data if I downgrade?</div>
+                                <p style="color: var(--text-secondary);">Your incident history and learned patterns are preserved. Premium features are simply disabled until you upgrade again.</p>
+                            </div>
+                            <div class="p-4 rounded-lg" style="background: var(--bg-dark);">
+                                <div class="font-bold mb-2"><i class="fas fa-question-circle text-primary mr-2"></i>Is there a free trial for paid plans?</div>
+                                <p style="color: var(--text-secondary);">Yes! All new users get a 14-day free trial of Baron features. No credit card required to start.</p>
                             </div>
                         </div>
-                    ` : ''}
+                        
+                        <div class="mt-6 pt-6" style="border-top: 1px solid var(--border);">
+                            <a href="#" class="text-primary hover:underline"><i class="fas fa-headset mr-2"></i>Contact Support</a>
+                        </div>
+                    </div>
+                </div>
+                `;
+        }
+
+        function renderPlanFeature(icon, name, included, type = 'normal') {
+            const highlightStyle = type === 'highlight' ? 'background: rgba(0, 188, 212, 0.15); padding: 8px 12px; margin: -4px -12px; border-radius: 8px;' : '';
+            return `
+                <div class="flex items-center justify-between" style="${highlightStyle}">
+                    <div class="flex items-center gap-3">
+                        <i class="fas ${icon} w-5 text-center" style="color: ${included ? 'var(--primary)' : 'var(--text-muted)'};"></i>
+                        <span style="color: ${included ? '#FFFFFF' : 'var(--text-muted)'}; ${!included ? 'text-decoration: line-through;' : ''}">${name}</span>
+                    </div>
+                    ${included ? '<i class="fas fa-check" style="color: var(--primary);"></i>' : '<i class="fas fa-times" style="color: var(--text-muted);"></i>'}
                 </div>
             `;
         }
@@ -878,69 +1279,154 @@
                         </div>
                     ` : ''}
 
-                    <div class="card rounded-xl p-6 shadow-xl">
+                    <div class="card-glow rounded-xl p-6">
                         <h2 class="text-2xl font-bold mb-6 flex items-center gap-3">
-                            <i class="fas fa-th-large text-primary"></i>
-                            System Health Overview
+                            <i class="fas fa-th-large gradient-text"></i>
+                            <span class="gradient-text text-glow">System Health Overview</span>
                         </h2>
                         
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div class="bg-black bg-opacity-30 rounded-lg p-6 border-l-4 border-blue-500">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                            <!-- Phase 1: Detection -->
+                            <div class="phase-card phase-detection">
                                 <div class="flex items-center justify-between mb-4">
                                     <h3 class="font-bold text-lg">Phase 1: Detection</h3>
-                                    <span class="bg-blue-900/50 text-blue-300 px-3 py-1 rounded-full text-xs font-bold">ACTIVE</span>
+                                    <span class="px-3 py-1 rounded-full text-xs font-bold" style="background: rgba(59, 130, 246, 0.2); color: #60A5FA; box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);">ACTIVE</span>
                                 </div>
-                                <div class="space-y-3">
+                                <div class="space-y-4">
                                     <div class="flex justify-between items-center">
-                                        <span class="text-sm text-gray-400">Critical Incidents</span>
-                                        <span class="text-2xl font-bold ${critical > 0 ? 'text-red-400' : 'text-green-400'}">${critical}</span>
+                                        <span class="text-sm" style="color: var(--text-muted);">Critical Incidents</span>
+                                        <span class="text-2xl font-bold ${critical > 0 ? 'status-critical' : 'status-healthy'}">${critical}</span>
                                     </div>
                                     <div class="flex justify-between items-center">
-                                        <span class="text-sm text-gray-400">Anomalies (24h)</span>
-                                        <span class="text-2xl font-bold text-orange-400">${state.anomalies.length}</span>
+                                        <span class="text-sm" style="color: var(--text-muted);">Anomalies (24h)</span>
+                                        <span class="text-2xl font-bold status-warning">${state.anomalies.length}</span>
+                                    </div>
+                                    <div class="progress-bar mt-2">
+                                        <div class="progress-fill" style="width: ${Math.min(state.anomalies.length * 5, 100)}%;"></div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="bg-black bg-opacity-30 rounded-lg p-6 border-l-4 border-purple-500 ${isPremiumLocked ? 'opacity-50' : ''}">
+                            <!-- Phase 2: Supervised -->
+                            <div class="phase-card phase-supervised ${isPremiumLocked ? 'opacity-50' : ''}">
                                 <div class="flex items-center justify-between mb-4">
                                     <h3 class="font-bold text-lg">Phase 2: Supervised</h3>
-                                    <span class="bg-purple-900/50 text-purple-300 px-3 py-1 rounded-full text-xs font-bold">
+                                    <span class="px-3 py-1 rounded-full text-xs font-bold" style="background: ${isPremiumLocked ? 'rgba(100, 100, 100, 0.2)' : 'rgba(168, 85, 247, 0.2)'}; color: ${isPremiumLocked ? '#888' : '#C084FC'}; box-shadow: 0 0 10px ${isPremiumLocked ? 'transparent' : 'rgba(168, 85, 247, 0.3)'};">
                                         ${isPremiumLocked ? 'LOCKED' : 'ACTIVE'}
                                     </span>
                                 </div>
-                                <div class="space-y-3">
+                                <div class="space-y-4">
                                     <div class="flex justify-between items-center">
-                                        <span class="text-sm text-gray-400">Pending Approval</span>
-                                        <span class="text-2xl font-bold ${isPremiumLocked ? 'text-gray-600' : pending > 0 ? 'text-orange-400' : 'text-gray-400'}">${isPremiumLocked ? '—' : pending}</span>
+                                        <span class="text-sm" style="color: var(--text-muted);">Pending Approval</span>
+                                        <span class="text-2xl font-bold ${isPremiumLocked ? '' : pending > 0 ? 'status-warning' : ''}" style="color: ${isPremiumLocked ? 'var(--text-muted)' : ''}">${isPremiumLocked ? '—' : pending}</span>
                                     </div>
                                     <div class="flex justify-between items-center">
-                                        <span class="text-sm text-gray-400">Actions Learned</span>
-                                        <span class="text-2xl font-bold text-purple-400">${state.learningStats.total_actions_recorded || 0}</span>
+                                        <span class="text-sm" style="color: var(--text-muted);">Actions Learned</span>
+                                        <span class="text-2xl font-bold" style="color: #C084FC;">${state.learningStats.total_actions_recorded || 0}</span>
+                                    </div>
+                                    <div class="progress-bar mt-2">
+                                        <div class="progress-fill" style="width: ${Math.min((state.learningStats.total_actions_recorded || 0) * 3, 100)}%; background: linear-gradient(90deg, #A855F7, #C084FC);"></div>
                                     </div>
                                 </div>
-                                ${isPremiumLocked ? '<div class="absolute inset-0 flex items-center justify-center"><i class="fas fa-lock text-4xl text-gray-700"></i></div>' : ''}
                             </div>
 
-                            <div class="bg-black bg-opacity-30 rounded-lg p-6 border-l-4 border-green-500 ${isPremiumLocked ? 'opacity-50' : ''}">
+                            <!-- Phase 3: Autonomous -->
+                            <div class="phase-card phase-autonomous ${isPremiumLocked ? 'opacity-50' : ''}">
                                 <div class="flex items-center justify-between mb-4">
                                     <h3 class="font-bold text-lg">Phase 3: Autonomous</h3>
-                                    <span class="bg-green-900/50 text-green-300 px-3 py-1 rounded-full text-xs font-bold">
+                                    <span class="px-3 py-1 rounded-full text-xs font-bold" style="background: ${isPremiumLocked ? 'rgba(100, 100, 100, 0.2)' : 'rgba(34, 197, 94, 0.2)'}; color: ${isPremiumLocked ? '#888' : '#4ADE80'}; box-shadow: 0 0 10px ${isPremiumLocked ? 'transparent' : 'rgba(34, 197, 94, 0.3)'};">
                                         ${isPremiumLocked ? 'LOCKED' : state.autonomousStatus?.autonomous_enabled ? 'ENABLED' : 'DISABLED'}
                                     </span>
                                 </div>
-                                <div class="space-y-3">
+                                <div class="space-y-4">
                                     <div class="flex justify-between items-center">
-                                        <span class="text-sm text-gray-400">Success Rate</span>
-                                        <span class="text-2xl font-bold ${isPremiumLocked ? 'text-gray-600' : 'text-green-400'}">${isPremiumLocked ? '—' : successRate}%</span>
+                                        <span class="text-sm" style="color: var(--text-muted);">Success Rate</span>
+                                        <span class="text-2xl font-bold ${isPremiumLocked ? '' : 'status-healthy'}" style="color: ${isPremiumLocked ? 'var(--text-muted)' : ''}">${isPremiumLocked ? '—' : successRate}%</span>
                                     </div>
                                     <div class="flex justify-between items-center">
-                                        <span class="text-sm text-gray-400">Auto Executed</span>
-                                        <span class="text-2xl font-bold text-green-400">${isPremiumLocked ? '—' : autoSuccess}</span>
+                                        <span class="text-sm" style="color: var(--text-muted);">Auto Executed</span>
+                                        <span class="text-2xl font-bold status-healthy">${isPremiumLocked ? '—' : autoSuccess}</span>
+                                    </div>
+                                    <div class="progress-bar mt-2">
+                                        <div class="progress-fill" style="width: ${successRate}%; background: linear-gradient(90deg, #22C55E, #4ADE80);"></div>
                                     </div>
                                 </div>
-                                ${isPremiumLocked ? '<div class="absolute inset-0 flex items-center justify-center"><i class="fas fa-lock text-4xl text-gray-700"></i></div>' : ''}
                             </div>
+                        </div>
+
+                        <!-- Incident Trend Chart -->
+                        <div class="chart-container mb-6">
+                            <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                                <i class="fas fa-chart-area gradient-text"></i>
+                                Incident Trend (24h)
+                            </h3>
+                            <div style="height: 200px;">
+                                <canvas id="incidentTrendChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Learning Intelligence Panel -->
+                    <div class="card-glow rounded-xl p-6 mb-6">
+                        <h2 class="text-2xl font-bold mb-6 flex items-center gap-3">
+                            <i class="fas fa-brain gradient-text"></i>
+                            <span class="gradient-text">Learning Intelligence</span>
+                            <span class="ml-auto px-3 py-1 rounded-full text-xs font-bold" style="background: rgba(0, 188, 212, 0.2); color: var(--primary);">
+                                ${state.learningStats?.total_patterns || '580+'}+ Patterns
+                            </span>
+                        </h2>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <!-- Knowledge Base Stats -->
+                            <div class="bg-black bg-opacity-30 rounded-lg p-4 border border-primary/20 hover:border-primary/50 transition">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <i class="fas fa-database text-primary"></i>
+                                    <span class="text-sm text-gray-400">Knowledge Base</span>
+                                </div>
+                                <div class="text-3xl font-bold text-white">${state.learningStats?.total_patterns || 580}</div>
+                                <div class="text-xs text-gray-500">Total Patterns</div>
+                            </div>
+                            
+                            <!-- Autonomous Safe -->
+                            <div class="bg-black bg-opacity-30 rounded-lg p-4 border border-green-500/20 hover:border-green-500/50 transition">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <i class="fas fa-robot text-green-400"></i>
+                                    <span class="text-sm text-gray-400">Autonomous Safe</span>
+                                </div>
+                                <div class="text-3xl font-bold text-green-400">${state.learningStats?.autonomous_safe || 45}</div>
+                                <div class="text-xs text-gray-500">Auto-Execute Ready</div>
+                            </div>
+                            
+                            <!-- Learning Rate -->
+                            <div class="bg-black bg-opacity-30 rounded-lg p-4 border border-purple-500/20 hover:border-purple-500/50 transition">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <i class="fas fa-graduation-cap text-purple-400"></i>
+                                    <span class="text-sm text-gray-400">Success Rate</span>
+                                </div>
+                                <div class="text-3xl font-bold text-purple-400">${state.learningStats?.success_rate || 94}%</div>
+                                <div class="text-xs text-gray-500">Action Accuracy</div>
+                            </div>
+                            
+                            <!-- Patterns Promoted -->
+                            <div class="bg-black bg-opacity-30 rounded-lg p-4 border border-cyan-500/20 hover:border-cyan-500/50 transition">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <i class="fas fa-arrow-up text-cyan-400"></i>
+                                    <span class="text-sm text-gray-400">Promoted</span>
+                                </div>
+                                <div class="text-3xl font-bold text-cyan-400">${state.learningStats?.patterns_promoted || 12}</div>
+                                <div class="text-xs text-gray-500">To Autonomous</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Pattern Categories Breakdown -->
+                        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                            ${renderPatternCategoryBadge('kubernetes', 'fa-dharmachakra', '#326CE5', state.learningStats?.by_category?.kubernetes || 150)}
+                            ${renderPatternCategoryBadge('database', 'fa-database', '#336791', state.learningStats?.by_category?.database || 130)}
+                            ${renderPatternCategoryBadge('cloud', 'fa-cloud', '#FF9900', state.learningStats?.by_category?.cloud || 100)}
+                            ${renderPatternCategoryBadge('application', 'fa-code', '#68A063', state.learningStats?.by_category?.application || 55)}
+                            ${renderPatternCategoryBadge('cicd', 'fa-rocket', '#FC6D26', state.learningStats?.by_category?.cicd || 45)}
+                            ${renderPatternCategoryBadge('network', 'fa-network-wired', '#00BCD4', state.learningStats?.by_category?.network || 32)}
+                            ${renderPatternCategoryBadge('security', 'fa-shield-alt', '#E53935', state.learningStats?.by_category?.security || 30)}
                         </div>
                     </div>
 
@@ -989,7 +1475,7 @@
         function renderRecentActions() {
             const recent = state.actionHistory.slice(0, 5);
             const isPremiumLocked = !isFeatureAllowed('auto_remediation');
-            
+
             return `
                 <div class="card rounded-xl p-6 ${isPremiumLocked ? 'opacity-50' : ''}">
                     <div class="flex items-center justify-between mb-4">
@@ -1091,8 +1577,8 @@
                 </div>
             `;
         }
-        
-        function renderActionsView() { 
+
+        function renderActionsView() {
             const isPremiumLocked = !isFeatureAllowed('auto_remediation');
             if (isPremiumLocked) {
                 return `
@@ -1108,7 +1594,7 @@
                     </div>
                 `;
             }
-            
+
             return `
                 <div class="space-y-6">
                     <h2 class="text-2xl font-bold">
@@ -1203,9 +1689,71 @@
                 </div>
             `;
         }
-        
-        function renderAutonomousView() { 
+
+        function showNotification(message, type) {
+            const notif = document.createElement('div');
+
+            // Define colors for each type
+            const colors = {
+                'success': 'bg-green-600',
+                'error': 'bg-red-600',
+                'info': 'bg-blue-600',
+                'warning': 'bg-orange-600'
+            };
+
+            const icons = {
+                'success': 'fa-check-circle',
+                'error': 'fa-exclamation-circle',
+                'info': 'fa-info-circle',
+                'warning': 'fa-exclamation-triangle'
+            };
+
+            notif.className = `fixed top-6 right-6 z-50 p-4 rounded-lg shadow-2xl slide-in ${colors[type] || colors.info}`;
+            notif.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <i class="fas ${icons[type] || icons.info} text-2xl"></i>
+                    <span class="font-semibold">${message}</span>
+                </div>
+            `;
+
+            document.body.appendChild(notif);
+
+            // Auto-remove after 3 seconds
+            setTimeout(() => {
+                notif.style.opacity = '0';
+                notif.style.transform = 'translateX(100%)';
+                setTimeout(() => notif.remove(), 300);
+            }, 3000);
+        }
+
+        function renderModeButton(mode, icon, label, description) {
+            const currentMode = state.autonomousStatus?.execution_mode || 'supervised';
+            const isActive = currentMode === mode;
+
+            return `
+                <button 
+                    onclick="changeExecutionMode('${mode}')"
+                    class="p-6 rounded-lg border-2 transition text-left cursor-pointer hover:shadow-lg ${isActive
+                    ? 'border-primary bg-primary bg-opacity-10 shadow-lg'
+                    : 'border-gray-700 hover:border-gray-600'
+                }"
+                    ${!AUTONOMOUS_ENABLED ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+                    <div class="text-3xl mb-2">
+                        <i class="fas ${icon} ${isActive ? 'text-primary' : 'text-gray-400'}"></i>
+                    </div>
+                    <div class="font-bold mb-1">${label}</div>
+                    <div class="text-xs text-gray-400">${description}</div>
+                    ${isActive ? '<div class="text-xs text-primary mt-2"><i class="fas fa-check mr-1"></i>Active</div>' : ''}
+                </button>
+            `;
+        }
+        // ============================================================================
+        // FIX 3: Updated renderAutonomousView() - Replace entire function
+        // ============================================================================
+
+        function renderAutonomousView() {
             const isPremiumLocked = !isFeatureAllowed('autonomous_mode');
+
             if (isPremiumLocked) {
                 return `
                     <div class="text-center py-20">
@@ -1220,7 +1768,28 @@
                     </div>
                 `;
             }
-            
+
+            // Check if autonomous mode is actually available (backend check)
+            if (!state.autonomousStatus || state.autonomousStatus.autonomous_enabled === false) {
+                return `
+                    <div class="text-center py-20">
+                        <i class="fas fa-exclamation-triangle text-6xl text-yellow-500 mb-6"></i>
+                        <h2 class="text-3xl font-bold mb-4">Autonomous Mode Unavailable</h2>
+                        <p class="text-gray-400 mb-6 max-w-md mx-auto">
+                            ${state.autonomousStatus?.message || 'Autonomous mode is not configured on the backend. Please check server configuration.'}
+                        </p>
+                        <div class="bg-gray-800 rounded-lg p-4 max-w-lg mx-auto text-left">
+                            <p class="text-sm text-gray-300 mb-2"><strong>Backend Status:</strong></p>
+                            <ul class="text-sm text-gray-400 space-y-1">
+                                <li><i class="fas fa-circle text-xs mr-1"></i>Autonomous Enabled: ${state.autonomousStatus?.autonomous_enabled ? '<i class="fas fa-check text-green-500"></i>' : '<i class="fas fa-times text-red-500"></i>'}</li>
+                                <li><i class="fas fa-circle text-xs mr-1"></i>User Has Access: ${state.autonomousStatus?.user_has_access ? '<i class="fas fa-check text-green-500"></i>' : '<i class="fas fa-times text-red-500"></i>'}</li>
+                                <li><i class="fas fa-circle text-xs mr-1"></i>User Plan: ${state.autonomousStatus?.user_plan || 'unknown'}</li>
+                            </ul>
+                        </div>
+                    </div>
+                `;
+            }
+
             const status = state.autonomousStatus || {};
             const safety = state.safetyStatus || {};
             const outcomes = state.outcomes || [];
@@ -1237,25 +1806,45 @@
                         <i class="fas fa-robot text-primary mr-2"></i>Autonomous Execution Control
                     </h2>
 
-                    <div class="card rounded-xl p-6">
-                        <h3 class="text-xl font-bold mb-4">Execution Mode</h3>
+                    <div class="card-glow rounded-xl p-6">
+                        <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                            <i class="fas fa-sliders-h gradient-text"></i>
+                            <span>Execution Mode</span>
+                        </h3>
                         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                            ${['manual', 'supervised', 'autonomous', 'night_mode'].map(mode => `
-                                <button class="p-6 rounded-lg border-2 transition ${status.execution_mode === mode ? 'border-primary bg-primary bg-opacity-10' : 'border-gray-700 hover:border-gray-600'} text-left">
-                                    <div class="text-3xl mb-2">
-                                        <i class="fas ${{ manual: 'fa-hand-paper', supervised: 'fa-eye', autonomous: 'fa-robot', night_mode: 'fa-moon' }[mode]} text-primary"></i>
+                            ${(() => {
+                    const modes = ['manual', 'supervised', 'autonomous', 'night_mode'];
+                    const icons = {
+                        manual: 'fa-hand-paper',
+                        supervised: 'fa-eye',
+                        autonomous: 'fa-robot',
+                        night_mode: 'fa-moon'
+                    };
+                    const descriptions = {
+                        manual: 'All actions require approval',
+                        supervised: 'Low-risk auto-approved',
+                        autonomous: 'High-confidence auto-exec',
+                        night_mode: 'Auto during off-hours'
+                    };
+                    return modes.map(mode => {
+                        const isActive = status.execution_mode === mode;
+                        return `
+                            <div onclick="changeExecutionMode('${mode}')" class="mode-card ${isActive ? 'active' : ''}">
+                                <div class="mode-icon">
+                                    <i class="fas ${icons[mode]}"></i>
+                                </div>
+                                <div class="font-bold mb-1">${mode.replace('_', ' ').toUpperCase()}</div>
+                                <div class="text-xs mb-3" style="color: var(--text-muted);">${descriptions[mode]}</div>
+                                ${isActive ? `
+                                    <div class="flex items-center gap-2 text-xs">
+                                        <span class="status-dot healthy"></span>
+                                        <span class="status-healthy">Active</span>
                                     </div>
-                                    <div class="font-bold mb-1">${mode.replace('_', ' ').toUpperCase()}</div>
-                                    <div class="text-xs text-gray-400">
-                                        ${{
-                    manual: 'All actions require approval',
-                    supervised: 'Low-risk auto-approved',
-                    autonomous: 'High-confidence auto-exec',
-                    night_mode: 'Auto during off-hours'
-                }[mode]}
-                                    </div>
-                                </button>
-                            `).join('')}
+                                ` : ''}
+                            </div>
+                        `;
+                    }).join('');
+                })()}
                         </div>
                     </div>
 
@@ -1268,7 +1857,7 @@
                                 <div class="text-sm text-gray-400 mb-2">
                                     <i class="fas fa-check-circle mr-1"></i>Success Rate
                                 </div>
-                                <div class="text-4xl font-bold text-green-400">${stats.success_rate} percent</div>
+                                <div class="text-4xl font-bold text-green-400">${stats.success_rate}%</div>
                                 <div class="text-sm text-gray-500 mt-1">${stats.successes} of ${stats.total} actions</div>
                             </div>
                             <div class="bg-blue-900/20 rounded-lg p-6 border border-blue-700/50">
@@ -1281,7 +1870,27 @@
                                 <div class="text-sm text-gray-400 mb-2">
                                     <i class="fas fa-percentage mr-1"></i>Avg Confidence
                                 </div>
-                                <div class="text-4xl font-bold text-purple-400">${status.confidence_threshold || 75} percent</div>
+                                <div class="text-4xl font-bold text-purple-400">${status.confidence_threshold || 75}%</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card rounded-xl p-6">
+                        <h3 class="text-xl font-bold mb-4">
+                            <i class="fas fa-shield-alt text-primary mr-2"></i>Safety Rails Status
+                        </h3>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            <div class="bg-black bg-opacity-30 rounded-lg p-4">
+                                <div class="text-sm text-gray-400 mb-1">Active Actions</div>
+                                <div class="text-2xl font-bold">${safety.current_state?.active_actions || 0} / ${safety.limits?.max_concurrent_actions || 3}</div>
+                            </div>
+                            <div class="bg-black bg-opacity-30 rounded-lg p-4">
+                                <div class="text-sm text-gray-400 mb-1">Cooldown Period</div>
+                                <div class="text-2xl font-bold">${safety.limits?.action_cooldown_seconds || 300}s</div>
+                            </div>
+                            <div class="bg-black bg-opacity-30 rounded-lg p-4">
+                                <div class="text-sm text-gray-400 mb-1">Recent Rollbacks</div>
+                                <div class="text-2xl font-bold">${safety.current_state?.recent_rollbacks || 0} / ${safety.limits?.max_rollbacks_per_hour || 2}</div>
                             </div>
                         </div>
                     </div>
@@ -1300,7 +1909,7 @@
                                                     <i class="fas ${outcome.success ? 'fa-check-circle text-green-400' : 'fa-times-circle text-red-400'}"></i>
                                                     <span class="font-bold">${outcome.action_type}</span>
                                                     <span class="text-gray-400 text-sm">
-                                                        <i class="fas fa-percentage mr-1"></i>Confidence: ${outcome.confidence} percent
+                                                        <i class="fas fa-percentage mr-1"></i>Confidence: ${outcome.confidence}%
                                                     </span>
                                                 </div>
                                                 <div class="text-sm text-gray-400">
@@ -1319,7 +1928,34 @@
                 </div>
             `;
         }
-        
+
+        // ============================================================================
+        // NEW: Change Execution Mode Function
+        // ============================================================================
+
+        async function changeExecutionMode(mode) {
+            try {
+                const response = await fetch(`${API_BASE}/api/v3/autonomous/mode/public`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mode: mode,
+                        confidence_threshold: state.autonomousStatus?.confidence_threshold || 75
+                    })
+                });
+
+                if (response.ok) {
+                    showNotification(`Execution mode changed to ${mode}`, 'success');
+                    await fetchAllData(); // Refresh data
+                } else {
+                    const error = await response.json();
+                    showNotification(error.detail || 'Failed to change mode', 'error');
+                }
+            } catch (error) {
+                showNotification('Error changing mode: ' + error.message, 'error');
+            }
+        }
+
         function renderServicesView() {
             return `
                 <div class="space-y-6">
@@ -1372,7 +2008,7 @@
                 </div>
             `;
         }
-        
+
         function renderAnalyticsView() {
             const totalIncidents = state.incidents.length;
             const criticalIncidents = state.incidents.filter(i => i.severity === 'critical').length;
@@ -1457,7 +2093,7 @@
                 </div>
             `;
         }
-        
+
         function renderHealthMetric(label, value, colorClass) {
             const colorMap = {
                 'green': 'bg-green-600',
@@ -1465,14 +2101,14 @@
                 'red': 'bg-red-600',
                 'primary': 'bg-primary'
             };
-            
+
             const textColorMap = {
                 'green': 'text-green-400',
                 'orange': 'text-orange-400',
                 'red': 'text-red-400',
                 'primary': 'text-primary'
             };
-            
+
             return `
                 <div class="card rounded-lg p-4">
                     <div class="text-sm text-gray-400 mb-2">${label}</div>
@@ -1481,7 +2117,7 @@
                 </div>
             `;
         }
-        
+
         function getRiskClass(risk) {
             const classes = {
                 low: 'bg-green-900/50 text-green-300',
@@ -1490,8 +2126,8 @@
             };
             return classes[risk] || classes.medium;
         }
-        
-         function renderNotifications() {
+
+        function renderNotifications() {
             const criticalIncidents = state.incidents.filter(i => i.severity === 'critical').length;
             const urgentActions = state.pendingActions.filter(a => a.risk === 'high').length;
 
@@ -1578,10 +2214,119 @@
             }
         }
 
+        // Chart.js Initialization
+        let incidentChart = null;
+        let serviceHealthChart = null;
+
+        function initializeCharts() {
+            // Wait for canvas to be available
+            setTimeout(() => {
+                initIncidentTrendChart();
+            }, 100);
+        }
+
+        function initIncidentTrendChart() {
+            const canvas = document.getElementById('incidentTrendChart');
+            if (!canvas) return;
+
+            // Destroy existing chart if any
+            if (incidentChart) {
+                incidentChart.destroy();
+            }
+
+            const ctx = canvas.getContext('2d');
+
+            // Generate sample data for last 24 hours
+            const labels = [];
+            const data = [];
+            for (let i = 23; i >= 0; i--) {
+                const hour = new Date();
+                hour.setHours(hour.getHours() - i);
+                labels.push(hour.getHours() + ':00');
+                data.push(Math.floor(Math.random() * 5) + (i < 5 ? 2 : 0));
+            }
+
+            // Create gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+            gradient.addColorStop(0, 'rgba(0, 188, 212, 0.4)');
+            gradient.addColorStop(1, 'rgba(0, 188, 212, 0.0)');
+
+            incidentChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Incidents',
+                        data: data,
+                        borderColor: '#00BCD4',
+                        backgroundColor: gradient,
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#00BCD4',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 1,
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
+                        pointHoverBackgroundColor: '#00BCD4',
+                        pointHoverBorderColor: '#fff',
+                        pointHoverBorderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(22, 27, 34, 0.9)',
+                            titleColor: '#fff',
+                            bodyColor: '#B8C4CE',
+                            borderColor: '#30363D',
+                            borderWidth: 1,
+                            padding: 12,
+                            displayColors: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: 'rgba(48, 54, 61, 0.5)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#64748B',
+                                maxRotation: 0,
+                                maxTicksLimit: 8
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(48, 54, 61, 0.5)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#64748B',
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    }
+                }
+            });
+        }
+
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
             await initializeSubscription();
             await fetchAllData();
+            initializeCharts();
         });
     </script>
 </body>

@@ -10,10 +10,10 @@ from sqlalchemy.orm import Session
 from typing import Optional
 import json
 
-from database import get_db
-from auth import get_current_user
-from models import User, Subscription
-from razorpay_service import (
+from src.database import get_db
+from src.auth import get_current_user
+from src.models import User, Subscription
+from src.razorpay_service import (
     create_razorpay_subscription,
     create_payment_link,
     verify_razorpay_signature,
@@ -33,7 +33,7 @@ from razorpay_service import (
     RAZORPAY_KEY_ID,
     RAZORPAY_WEBHOOK_SECRET
 )
-from subscription_service import cancel_subscription
+from src.subscription_service import cancel_subscription
 
 router = APIRouter(prefix="/api/razorpay", tags=["razorpay"])
 

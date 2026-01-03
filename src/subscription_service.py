@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict
 import secrets
 
-from models import (
+from src.models import (
     User, Subscription, SubscriptionStatus, 
     SubscriptionPlan, AuditLog
 )
@@ -98,7 +98,7 @@ def upgrade_to_paid(db, user_id: str, plan, payment_provider: str,
                    payment_provider_customer_id: str, 
                    payment_provider_subscription_id: str):
     """Upgrade user to paid subscription"""
-    from models import Subscription
+    from src.models import Subscription
     from datetime import datetime, timedelta, timezone
     
     try:
@@ -180,31 +180,6 @@ def check_subscription_expiry(db: Session, subscription: Subscription) -> bool:
     
     return changed
 
-def renew_subscription(
-    db: Session,
-    subscription_id: str,
-    new_period_end: datetime
-) -> Subscription:
-    """Renew subscription (called by payment webhook)"""
-    subscription = db.query(Subscription).filter(
-        Subscription.subscription_id == subscription_id
-    ).first()
-    
-    if not subscription:
-        raise ValueError("Subscription not found")
-    
-    now = datetime.now(timezone.utc)
-    
-    subscription.status = SubscriptionStatus.ACTIVE
-    subscription.current_period_start = now
-    subscription.current_period_end = new_period_end
-    
-    db.commit()
-    db.refresh(subscription)
-    
-    print(f"[SUBSCRIPTION] Renewed {subscription_id} until {new_period_end}")
-    
-    return subscription
 
 def cancel_subscription(
     db: Session,
@@ -436,3 +411,98 @@ def get_subscription_stats(db: Session) -> Dict:
     ).count()
     
     return stats
+
+# ============================================================================
+# Scheduled Tasks
+# ============================================================================
+
+def check_all_expirations(db: Session):
+    """
+    Background task to check all active subscriptions for expiration.
+    Used by main.py scheduler.
+    """
+    try:
+        # Get all active or trialing subscriptions
+        subscriptions = db.query(Subscription).filter(
+            Subscription.status.in_([
+                SubscriptionStatus.ACTIVE, 
+                SubscriptionStatus.TRIALING
+            ])
+        ).all()
+        
+        # We can iterate through them and check validity
+        # Note: You might need to import check_subscription_expiry if it's not available in scope
+        # or implement the logic here directly.
+        for sub in subscriptions:
+            if sub.expires_at and sub.expires_at < datetime.now(timezone.utc):
+                sub.status = SubscriptionStatus.EXPIRED
+                
+        db.commit()
+            
+    except Exception as e:
+        db.rollback()
+        print(f"Error in check_all_expirations: {e}")
+        
+def renew_subscription(db: Session, subscription_id: str, duration_days: int = 30) -> bool:
+    """Extend a subscription by a set number of days"""
+    try:
+        sub = db.query(Subscription).filter(Subscription.id == subscription_id).first()
+        if not sub:
+            return False
+            
+        # If already expired, start from now. If active, add to current expiry.
+        now = datetime.now(timezone.utc)
+        start_date = max(sub.expires_at, now) if sub.expires_at else now
+        
+        sub.expires_at = start_date + timedelta(days=duration_days)
+        sub.status = SubscriptionStatus.ACTIVE
+        db.commit()
+        return True
+    except Exception as e:
+        db.rollback()
+        print(f"Error renewing subscription: {e}")
+        return False
+
+def renew_subscription(
+    db: Session,
+    subscription_id: str,
+    new_period_end: datetime
+) -> Subscription:
+    """Renew subscription (called by payment webhook)"""
+    subscription = db.query(Subscription).filter(
+        Subscription.subscription_id == subscription_id
+    ).first()
+    
+    if not subscription:
+        raise ValueError("Subscription not found")
+    
+    now = datetime.now(timezone.utc)
+    
+    subscription.status = SubscriptionStatus.ACTIVE
+    subscription.current_period_start = now
+    subscription.current_period_end = new_period_end
+    
+    db.commit()
+    db.refresh(subscription)
+    
+    print(f"[SUBSCRIPTION] Renewed {subscription_id} until {new_period_end}")
+    
+    return subscription
+
+def check_subscription_expiry(db: Session, user_id: str) -> Dict:
+    """Check if a user's subscription has expired and update status if needed"""
+    sub = db.query(Subscription).filter(
+        Subscription.user_id == user_id,
+        Subscription.status.in_([SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING])
+    ).first()
+    
+    if not sub:
+        return {"status": "no_active_subscription"}
+
+    # Check expiration
+    if sub.expires_at and sub.expires_at < datetime.now(timezone.utc):
+        sub.status = SubscriptionStatus.EXPIRED
+        db.commit()
+        return {"status": "expired", "expired_at": sub.expires_at}
+        
+    return {"status": "active", "expires_at": sub.expires_at}

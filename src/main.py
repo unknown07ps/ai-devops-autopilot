@@ -5,6 +5,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from pydantic import BaseModel
+from typing import Optional
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -20,20 +21,20 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import database and authentication
-from database import get_db, init_db, engine, get_db_context
-from auth import get_current_user, get_current_active_subscription, cleanup_expired_sessions
-from models import User, Subscription
+from src.database import get_db, init_db, engine, get_db_context
+from src.auth import get_current_user, get_current_active_subscription, cleanup_expired_sessions
+from src.models import User, Subscription
 
 # Import API routers
-from api.auth_api import router as auth_router
-from api.subscription_api import router as subscription_router, check_access
-from api.razorpay_api import router as razorpay_router
-from api.dashboard_api import router as dashboard_router
+from src.api.auth_api import router as auth_router
+from src.api.subscription_api import router as subscription_router, check_access
+from src.api.razorpay_api import router as razorpay_router
+from src.api.dashboard_api import router as dashboard_router
 
 # Import notification and scheduling components
-from notifications.email import send_expiry_reminder_email
-from scheduler.trial_jobs import check_trial_expirations, send_trial_reminders
-from subscription_service import check_all_expirations
+from src.notifications.email import send_expiry_reminder_email
+from src.scheduler.trial_jobs import check_trial_expirations, send_trial_reminders
+from src.subscription_service import check_all_expirations
 
 # Initialize Redis connection
 redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"))
@@ -92,7 +93,7 @@ AUTONOMOUS_ENABLED = False
 autonomous_executor = None
 
 try:
-    from autonomous_executor import AutonomousExecutor, ExecutionMode
+    from src.autonomous_executor import AutonomousExecutor, ExecutionMode
     
     # Simple action executor for Phase 3
     class SimpleActionExecutor:
@@ -130,6 +131,8 @@ try:
     
     # Initialize
     action_executor = SimpleActionExecutor(redis_client)
+    # Note: knowledge_base and learning_engine are set to None initially
+    # They will be connected after learning components are initialized below
     autonomous_executor = AutonomousExecutor(redis_client, action_executor)
     
     # Set initial mode from environment
@@ -343,10 +346,13 @@ class AutonomousModeUpdate(BaseModel):
     mode: str
     confidence_threshold: Optional[int] = None
 
+
 class LearningWeightsUpdate(BaseModel):
     rule_weight: Optional[float] = None
     ai_weight: Optional[float] = None
     historical_weight: Optional[float] = None
+
+
 
 # ============================================================================
 # Health Endpoints
@@ -594,6 +600,33 @@ async def ingest_deployment(deployment: DeploymentEvent, background_tasks: Backg
     except Exception as e:
         print(f"[ERROR] Deployment ingestion failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+# ============================================================================
+# Client API ENDPOINTS
+# ============================================================================
+    
+@app.post("/prometheus/write")
+async def prometheus_write_handler(request: Request):
+    """
+    Receive metrics from Prometheus remote_write
+    """
+    # Parse Prometheus protobuf format
+    import snappy
+    from prometheus_client.parser import text_string_to_metric_families
+    
+    body = await request.body()
+    
+    # Decompress
+    decompressed = snappy.decompress(body)
+    
+    # Convert to your format and ingest
+    metrics = parse_prometheus_metrics(decompressed)
+    
+    # Send to your ingestion pipeline
+    for metric in metrics:
+        await ingest_metric(metric)
+    
+    return {"status": "success"}
 
 # ============================================================================
 # PHASE 2 API ENDPOINTS
@@ -855,6 +888,46 @@ async def get_autonomous_status(
         print(f"[API ERROR] get_autonomous_status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/v3/autonomous/status/public")
+async def get_autonomous_status_public():
+    """Get autonomous execution status (public - for dashboard without auth)"""
+    try:
+        if not AUTONOMOUS_ENABLED:
+            return {
+                "autonomous_enabled": False,
+                "message": "Autonomous mode not available - check that autonomous_executor.py exists",
+                "user_has_access": False,
+                "user_plan": "unknown"
+            }
+        
+        # Get stats from Redis
+        outcomes_data = redis_client.lrange('autonomous_outcomes', 0, 99)
+        outcomes = [json.loads(o) for o in outcomes_data]
+        
+        total = len(outcomes)
+        successes = sum(1 for o in outcomes if o.get('success'))
+        success_rate = (successes / total * 100) if total > 0 else 0
+        
+        return {
+            "autonomous_enabled": True,
+            "user_has_access": True,  # Public endpoint assumes access
+            "user_plan": "demo",
+            "execution_mode": autonomous_executor.execution_mode.value,
+            "confidence_threshold": autonomous_executor.confidence_threshold,
+            "learning_weights": {
+                "rule_based": round(autonomous_executor.rule_weight, 3),
+                "ai": round(autonomous_executor.ai_weight, 3),
+                "historical": round(autonomous_executor.historical_weight, 3)
+            },
+            "total_autonomous_actions": total,
+            "successful_actions": successes,
+            "success_rate": round(success_rate, 1),
+            "active_actions": len(autonomous_executor.active_actions)
+        }
+    except Exception as e:
+        print(f"[API ERROR] get_autonomous_status_public: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/v3/autonomous/mode")
 async def set_autonomous_mode(
     update: AutonomousModeUpdate,
@@ -924,6 +997,57 @@ async def set_autonomous_mode(
         print(f"[API ERROR] set_autonomous_mode: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/v3/autonomous/mode/public")
+async def set_autonomous_mode_public(update: AutonomousModeUpdate):
+    """Change autonomous execution mode (public - for dashboard without auth)"""
+    try:
+        if not AUTONOMOUS_ENABLED or not autonomous_executor:
+            raise HTTPException(
+                status_code=503,
+                detail="Autonomous mode not available. Check that autonomous_executor.py exists in src/"
+            )
+        
+        # Validate mode
+        valid_modes = {
+            "manual": ExecutionMode.MANUAL,
+            "supervised": ExecutionMode.SUPERVISED,
+            "autonomous": ExecutionMode.AUTONOMOUS,
+            "night_mode": ExecutionMode.NIGHT_MODE
+        }
+        
+        if update.mode not in valid_modes:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid mode. Must be one of: {list(valid_modes.keys())}"
+            )
+        
+        # Update mode
+        autonomous_executor.set_execution_mode(valid_modes[update.mode])
+        
+        # Update confidence threshold if provided
+        if update.confidence_threshold is not None:
+            if not 0 <= update.confidence_threshold <= 100:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Confidence threshold must be between 0 and 100"
+                )
+            autonomous_executor.confidence_threshold = update.confidence_threshold
+        
+        return {
+            "status": "success",
+            "mode": update.mode,
+            "confidence_threshold": autonomous_executor.confidence_threshold,
+            "message": f"Autonomous mode changed to {update.mode}",
+            "timestamp": datetime.utcnow().isoformat(),
+            "plan": "demo"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[API ERROR] set_autonomous_mode_public: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/v3/autonomous/outcomes")
 async def get_autonomous_outcomes(
     limit: int = 50,
@@ -985,6 +1109,66 @@ async def get_autonomous_outcomes(
         print(f"[API ERROR] get_autonomous_outcomes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/v3/autonomous/outcomes/public")
+async def get_autonomous_outcomes_public(
+    limit: int = 50,
+    success_only: bool = False
+):
+    """Get autonomous action outcomes (public - for dashboard)"""
+    try:
+        outcomes_data = redis_client.lrange('autonomous_outcomes', 0, limit - 1)
+        
+        outcomes = []
+        for outcome_json in outcomes_data:
+            outcome = json.loads(outcome_json)
+            
+            if success_only and not outcome.get('success'):
+                continue
+            
+            outcomes.append(outcome)
+        
+        # Calculate statistics
+        total = len(outcomes)
+        successes = sum(1 for o in outcomes if o.get('success'))
+        failures = total - successes
+        
+        # Group by action type
+        by_action_type = {}
+        for outcome in outcomes:
+            action_type = outcome.get('action_type', 'unknown')
+            if action_type not in by_action_type:
+                by_action_type[action_type] = {'total': 0, 'success': 0}
+            
+            by_action_type[action_type]['total'] += 1
+            if outcome.get('success'):
+                by_action_type[action_type]['success'] += 1
+        
+        # Calculate per-type success rates
+        action_type_stats = []
+        for action_type, stats in by_action_type.items():
+            success_rate = (stats['success'] / stats['total'] * 100) if stats['total'] > 0 else 0
+            action_type_stats.append({
+                'action_type': action_type,
+                'total': stats['total'],
+                'successes': stats['success'],
+                'success_rate': round(success_rate, 1)
+            })
+        
+        return {
+            "outcomes": outcomes[:limit],
+            "statistics": {
+                "total": total,
+                "successes": successes,
+                "failures": failures,
+                "success_rate": round((successes / total * 100) if total > 0 else 0, 1),
+                "by_action_type": action_type_stats
+            },
+            "limit": limit
+        }
+    except Exception as e:
+        print(f"[API ERROR] get_autonomous_outcomes_public: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/v3/autonomous/safety-status")
 async def get_safety_status(current_user: User = Depends(get_current_user)):
     """Get current safety rail status and limits"""
@@ -1030,6 +1214,53 @@ async def get_safety_status(current_user: User = Depends(get_current_user)):
         }
     except Exception as e:
         print(f"[API ERROR] get_safety_status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v3/autonomous/safety-status/public")
+async def get_safety_status_public():
+    """Get current safety rail status and limits (public - for dashboard)"""
+    try:
+        if not AUTONOMOUS_ENABLED or not autonomous_executor:
+            return {
+                "safety_rails_active": False,
+                "message": "Autonomous mode not available"
+            }
+        
+        # Get recent rollback count
+        recent_rollbacks = autonomous_executor._count_recent_actions('rollback', hours=1)
+        
+        # Calculate time until cooldowns expire
+        active_cooldowns = []
+        current_time = datetime.now(timezone.utc).timestamp()
+        
+        for key, last_time in autonomous_executor.last_action_time.items():
+            remaining = autonomous_executor.action_cooldown_seconds - (current_time - last_time)
+            if remaining > 0:
+                service, action_type = key.split(':')
+                active_cooldowns.append({
+                    'service': service,
+                    'action_type': action_type,
+                    'remaining_seconds': int(remaining)
+                })
+        
+        return {
+            "safety_rails_active": True,
+            "limits": {
+                "max_concurrent_actions": autonomous_executor.max_concurrent_actions,
+                "action_cooldown_seconds": autonomous_executor.action_cooldown_seconds,
+                "max_rollbacks_per_hour": autonomous_executor.max_rollbacks_per_hour,
+                "max_scale_factor": autonomous_executor.max_scale_factor
+            },
+            "current_state": {
+                "active_actions": len(autonomous_executor.active_actions),
+                "active_cooldowns": len(active_cooldowns),
+                "recent_rollbacks": recent_rollbacks,
+                "cooldowns": active_cooldowns
+            },
+            "status": "operational"
+        }
+    except Exception as e:
+        print(f"[API ERROR] get_safety_status_public: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v3/autonomous/confidence-breakdown/{action_id}")
@@ -1497,6 +1728,556 @@ async def get_phase2_dashboard(user_id: Optional[str] = None):
         <h1>❌ Phase 2 Dashboard Not Found</h1>
         <p>Please ensure <code>dashboard_phase2.html</code> exists in the project root.</p>
         <p><a href="/dashboard">← Back to Main Dashboard</a></p></body></html>"""
+
+# ============================================================================
+# PHASE 4 API ENDPOINTS - ENTERPRISE FEATURES
+# ============================================================================
+
+# Import new modules (with graceful fallback)
+try:
+    from src.actions import UnifiedActionDispatcher, K8sActionType, CloudActionType, DatabaseActionType, CICDActionType
+    from src.runbooks import RunbookEngine, get_high_latency_runbook, get_database_connection_runbook, get_memory_leak_runbook
+    from src.analytics import ActionAnalytics
+    
+    # Initialize enterprise components
+    action_dispatcher = UnifiedActionDispatcher(redis_client)
+    runbook_engine = RunbookEngine(redis_client, action_dispatcher)
+    action_analytics = ActionAnalytics(redis_client)
+    
+    # Register default runbooks
+    runbook_engine.register_runbook(get_high_latency_runbook())
+    runbook_engine.register_runbook(get_database_connection_runbook())
+    runbook_engine.register_runbook(get_memory_leak_runbook())
+    
+    ENTERPRISE_ENABLED = True
+    print("[INIT] ✅ Enterprise modules initialized (Actions, Runbooks, Analytics)")
+except Exception as e:
+    ENTERPRISE_ENABLED = False
+    action_dispatcher = None
+    runbook_engine = None
+    action_analytics = None
+    print(f"[INIT] ⚠️ Enterprise modules not available: {e}")
+
+
+# --- Enhanced Actions API ---
+
+class ActionRequest(BaseModel):
+    category: str  # k8s, cloud, database, cicd
+    action_type: str
+    params: Dict[str, Any] = {}
+
+
+@app.get("/api/v4/actions/available")
+async def get_available_actions():
+    """Get all available action types by category"""
+    if not ENTERPRISE_ENABLED:
+        return {"error": "Enterprise features not enabled", "available": False}
+    
+    return {
+        "available": True,
+        "actions": action_dispatcher.get_available_actions(),
+        "categories": ["k8s", "cloud", "database", "cicd"]
+    }
+
+
+@app.post("/api/v4/actions/execute")
+async def execute_action(request: ActionRequest):
+    """Execute an action through the unified dispatcher"""
+    if not ENTERPRISE_ENABLED:
+        raise HTTPException(status_code=503, detail="Enterprise features not enabled")
+    
+    result = await action_dispatcher.execute(
+        request.category,
+        request.action_type,
+        request.params
+    )
+    
+    return result
+
+
+@app.get("/api/v4/actions/history")
+async def get_enhanced_action_history(
+    category: Optional[str] = None,
+    limit: int = 50
+):
+    """Get action history with optional category filter"""
+    history_keys = {
+        "k8s": "k8s_action_history",
+        "cloud": "cloud_action_history",
+        "database": "database_action_history",
+        "cicd": "cicd_action_history"
+    }
+    
+    actions = []
+    
+    if category and category in history_keys:
+        data = redis_client.lrange(history_keys[category], 0, limit - 1)
+        actions = [json.loads(a) for a in data]
+    else:
+        for key in history_keys.values():
+            data = redis_client.lrange(key, 0, 20)
+            actions.extend([json.loads(a) for a in data])
+        actions.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        actions = actions[:limit]
+    
+    return {
+        "actions": actions,
+        "total": len(actions),
+        "category": category
+    }
+
+
+# --- Runbooks API ---
+
+class RunbookRegistration(BaseModel):
+    id: str
+    name: str
+    description: str = ""
+    trigger: Dict[str, Any] = {}
+    steps: List[Dict[str, Any]]
+    variables: Dict[str, Any] = {}
+
+
+class RunbookExecution(BaseModel):
+    runbook_id: str
+    context: Dict[str, Any] = {}
+    incident_id: Optional[str] = None
+
+
+@app.get("/api/v4/runbooks")
+async def list_runbooks():
+    """List all registered runbooks"""
+    if not ENTERPRISE_ENABLED or not runbook_engine:
+        return {"runbooks": [], "enterprise_enabled": False}
+    
+    return {
+        "runbooks": runbook_engine.list_runbooks(),
+        "total": len(runbook_engine.runbooks)
+    }
+
+
+@app.get("/api/v4/runbooks/{runbook_id}")
+async def get_runbook(runbook_id: str):
+    """Get a specific runbook"""
+    if not ENTERPRISE_ENABLED or not runbook_engine:
+        raise HTTPException(status_code=503, detail="Runbook engine not available")
+    
+    runbook = runbook_engine.get_runbook(runbook_id)
+    if not runbook:
+        raise HTTPException(status_code=404, detail="Runbook not found")
+    
+    return {
+        "id": runbook.id,
+        "name": runbook.name,
+        "description": runbook.description,
+        "trigger": runbook.trigger,
+        "steps": [
+            {
+                "id": s.id,
+                "name": s.name,
+                "action_category": s.action_category,
+                "action_type": s.action_type,
+                "params": s.params,
+                "condition": s.condition,
+                "require_approval": s.require_approval
+            }
+            for s in runbook.steps
+        ],
+        "variables": runbook.variables
+    }
+
+
+@app.post("/api/v4/runbooks")
+async def register_runbook(runbook: RunbookRegistration):
+    """Register a new runbook"""
+    if not ENTERPRISE_ENABLED or not runbook_engine:
+        raise HTTPException(status_code=503, detail="Runbook engine not available")
+    
+    try:
+        result = runbook_engine.register_runbook(runbook.dict())
+        return {
+            "success": True,
+            "runbook_id": result.id,
+            "message": f"Runbook '{result.name}' registered"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/v4/runbooks/execute")
+async def execute_runbook(request: RunbookExecution, background_tasks: BackgroundTasks):
+    """Execute a runbook"""
+    if not ENTERPRISE_ENABLED or not runbook_engine:
+        raise HTTPException(status_code=503, detail="Runbook engine not available")
+    
+    # Execute in background
+    async def run_runbook():
+        return await runbook_engine.execute_runbook(
+            request.runbook_id,
+            request.context,
+            request.incident_id
+        )
+    
+    background_tasks.add_task(run_runbook)
+    
+    return {
+        "success": True,
+        "message": f"Runbook '{request.runbook_id}' execution started",
+        "runbook_id": request.runbook_id
+    }
+
+
+@app.get("/api/v4/runbooks/executions/{execution_id}")
+async def get_runbook_execution(execution_id: str):
+    """Get status of a runbook execution"""
+    if not ENTERPRISE_ENABLED or not runbook_engine:
+        raise HTTPException(status_code=503, detail="Runbook engine not available")
+    
+    status = runbook_engine.get_execution_status(execution_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Execution not found")
+    
+    return status
+
+
+@app.post("/api/v4/runbooks/executions/{execution_id}/cancel")
+async def cancel_runbook_execution(execution_id: str):
+    """Cancel a running runbook execution"""
+    if not ENTERPRISE_ENABLED or not runbook_engine:
+        raise HTTPException(status_code=503, detail="Runbook engine not available")
+    
+    return runbook_engine.cancel_execution(execution_id)
+
+
+# --- Analytics API ---
+
+@app.get("/api/v4/analytics/overview")
+async def get_analytics_overview(days: int = 30):
+    """Get analytics overview"""
+    if not ENTERPRISE_ENABLED or not action_analytics:
+        return {"error": "Analytics not available", "enterprise_enabled": False}
+    
+    return action_analytics.get_overview_stats(days)
+
+
+@app.get("/api/v4/analytics/trends")
+async def get_success_trends(days: int = 30):
+    """Get success rate trends"""
+    if not ENTERPRISE_ENABLED or not action_analytics:
+        return {"error": "Analytics not available"}
+    
+    return action_analytics.get_action_success_trends(days)
+
+
+@app.get("/api/v4/analytics/resolution-times")
+async def get_resolution_times(days: int = 30):
+    """Get resolution time analysis"""
+    if not ENTERPRISE_ENABLED or not action_analytics:
+        return {"error": "Analytics not available"}
+    
+    return action_analytics.get_resolution_time_analysis(days)
+
+
+@app.get("/api/v4/analytics/effectiveness")
+async def get_action_effectiveness(action_type: Optional[str] = None):
+    """Get action effectiveness analysis"""
+    if not ENTERPRISE_ENABLED or not action_analytics:
+        return {"error": "Analytics not available"}
+    
+    return action_analytics.get_action_effectiveness(action_type)
+
+
+@app.get("/api/v4/analytics/ai-accuracy")
+async def get_ai_accuracy():
+    """Get AI recommendation accuracy"""
+    if not ENTERPRISE_ENABLED or not action_analytics:
+        return {"error": "Analytics not available"}
+    
+    return action_analytics.get_recommendation_accuracy()
+
+
+@app.get("/api/v4/analytics/service-health")
+async def get_service_health():
+    """Get service health summary"""
+    if not ENTERPRISE_ENABLED or not action_analytics:
+        return {"error": "Analytics not available"}
+    
+    return action_analytics.get_service_health_summary()
+
+
+@app.get("/api/v4/analytics/cost-impact")
+async def get_cost_impact(days: int = 30):
+    """Get cost impact analysis"""
+    if not ENTERPRISE_ENABLED or not action_analytics:
+        return {"error": "Analytics not available"}
+    
+    return action_analytics.get_cost_impact_analysis(days)
+
+
+@app.get("/api/v4/status")
+async def get_enterprise_status():
+    """Get enterprise features status"""
+    return {
+        "enterprise_enabled": ENTERPRISE_ENABLED,
+        "features": {
+            "enhanced_actions": action_dispatcher is not None,
+            "runbooks": runbook_engine is not None,
+            "analytics": action_analytics is not None
+        },
+        "available_action_categories": ["k8s", "cloud", "database", "cicd"] if ENTERPRISE_ENABLED else [],
+        "registered_runbooks": len(runbook_engine.runbooks) if runbook_engine else 0
+    }
+
+
+# ============================================================================
+# Learning Stats API - Dashboard Integration
+# ============================================================================
+
+# Initialize learning components
+LEARNING_ENABLED = False
+knowledge_base = None
+learning_engine = None
+incident_analyzer = None
+
+try:
+    from src.training.devops_knowledge_base import DevOpsKnowledgeBase
+    from src.learning.learning_engine import LearningEngine
+    from src.analysis.incident_analyzer import IncidentAnalyzer
+    
+    knowledge_base = DevOpsKnowledgeBase(redis_client)
+    learning_engine = LearningEngine(redis_client)
+    incident_analyzer = IncidentAnalyzer(redis_client, knowledge_base)
+    
+    LEARNING_ENABLED = True
+    print(f"[INIT] ✅ Learning System initialized ({knowledge_base.get_stats()['total_patterns']} patterns)")
+    
+    # Connect learning components to autonomous executor
+    if AUTONOMOUS_ENABLED and autonomous_executor:
+        autonomous_executor.knowledge_base = knowledge_base
+        autonomous_executor.learning_engine = learning_engine
+        print("[INIT] ✅ Learning Engine connected to Autonomous Executor")
+        
+except ImportError as e:
+    print(f"[INIT] ⚠️ Learning components not available: {e}")
+except Exception as e:
+    print(f"[INIT] ⚠️ Failed to initialize learning system: {e}")
+
+
+@app.get("/api/v5/learning/stats")
+async def get_learning_stats():
+    """Get comprehensive learning system statistics"""
+    if not LEARNING_ENABLED:
+        return {"error": "Learning system not available", "learning_enabled": False}
+    
+    kb_stats = knowledge_base.get_stats()
+    learning_stats = learning_engine.get_learning_stats()
+    
+    # Get autonomous executor stats if available
+    autonomous_stats = {}
+    if AUTONOMOUS_ENABLED and autonomous_executor:
+        autonomous_stats = autonomous_executor.get_autonomous_stats()
+    
+    return {
+        "learning_enabled": True,
+        "knowledge_base": {
+            "total_patterns": kb_stats.get("total_patterns", 0),
+            "by_category": kb_stats.get("by_category", {}),
+            "by_severity": kb_stats.get("by_severity", {}),
+            "autonomous_safe_count": kb_stats.get("autonomous_safe_count", 0)
+        },
+        "learning_engine": {
+            "total_outcomes": learning_stats.get("total_outcomes", 0),
+            "success_rate": learning_stats.get("success_rate", 0),
+            "patterns_promoted": learning_stats.get("patterns_promoted", 0),
+            "patterns_demoted": learning_stats.get("patterns_demoted", 0),
+            "confidence_adjustments": learning_stats.get("confidence_adjustments", 0)
+        },
+        "autonomous": autonomous_stats
+    }
+
+
+@app.get("/api/v5/learning/knowledge-base")
+async def get_knowledge_base_stats():
+    """Get detailed knowledge base statistics"""
+    if not LEARNING_ENABLED or not knowledge_base:
+        return {"error": "Knowledge base not available"}
+    
+    stats = knowledge_base.get_stats()
+    
+    # Get pattern counts per category
+    category_details = {}
+    for cat_name, count in stats.get("by_category", {}).items():
+        patterns = knowledge_base.get_patterns_by_category(cat_name)
+        autonomous_safe = sum(1 for p in patterns if p.autonomous_safe)
+        high_severity = sum(1 for p in patterns if p.severity.value in ["critical", "high"])
+        category_details[cat_name] = {
+            "total": count,
+            "autonomous_safe": autonomous_safe,
+            "high_severity": high_severity
+        }
+    
+    return {
+        "total_patterns": stats.get("total_patterns", 0),
+        "by_category": category_details,
+        "by_severity": stats.get("by_severity", {}),
+        "autonomous_safe_total": stats.get("autonomous_safe_count", 0)
+    }
+
+
+@app.get("/api/v5/learning/patterns/{category}")
+async def get_patterns_by_category(category: str, limit: int = 20):
+    """Get patterns for a specific category"""
+    if not LEARNING_ENABLED or not knowledge_base:
+        return {"error": "Knowledge base not available"}
+    
+    try:
+        from src.training.devops_knowledge_base import PatternCategory
+        cat_enum = PatternCategory(category.lower())
+        patterns = knowledge_base.get_patterns_by_category(cat_enum)
+        
+        # Return simplified pattern info
+        return {
+            "category": category,
+            "count": len(patterns),
+            "patterns": [
+                {
+                    "id": p.pattern_id,
+                    "name": p.name,
+                    "severity": p.severity.value,
+                    "autonomous_safe": p.autonomous_safe,
+                    "signals": p.signals[:3],  # First 3 signals
+                    "resolution_time": p.resolution_time_avg_seconds
+                }
+                for p in patterns[:limit]
+            ]
+        }
+    except ValueError:
+        return {"error": f"Invalid category: {category}"}
+
+
+@app.get("/api/v5/learning/pattern/{pattern_id}")
+async def get_pattern_details(pattern_id: str):
+    """Get detailed information about a specific pattern"""
+    if not LEARNING_ENABLED or not knowledge_base:
+        return {"error": "Knowledge base not available"}
+    
+    pattern = knowledge_base.get_pattern(pattern_id)
+    if not pattern:
+        return {"error": f"Pattern not found: {pattern_id}"}
+    
+    # Get learning stats for this pattern
+    pattern_stats = learning_engine.get_pattern_stats(pattern_id) if learning_engine else {}
+    
+    return {
+        "pattern": {
+            "id": pattern.pattern_id,
+            "name": pattern.name,
+            "description": pattern.description,
+            "category": pattern.category.value,
+            "subcategory": pattern.subcategory,
+            "severity": pattern.severity.value,
+            "autonomous_safe": pattern.autonomous_safe,
+            "blast_radius": pattern.blast_radius.value,
+            "signals": pattern.signals,
+            "root_causes": pattern.root_causes,
+            "tags": pattern.tags,
+            "resolution_time_avg": pattern.resolution_time_avg_seconds,
+            "recommended_actions": [
+                {
+                    "type": a.action_type,
+                    "category": a.action_category,
+                    "confidence": a.confidence,
+                    "requires_approval": a.requires_approval
+                }
+                for a in pattern.recommended_actions
+            ]
+        },
+        "learning_stats": pattern_stats
+    }
+
+
+@app.post("/api/v5/learning/match")
+async def match_patterns(anomalies: List[Dict], logs: List[Dict] = None):
+    """Match anomalies against knowledge base patterns"""
+    if not LEARNING_ENABLED or not knowledge_base:
+        return {"error": "Knowledge base not available"}
+    
+    matches = knowledge_base.find_matching_patterns(anomalies, logs or [])
+    
+    return {
+        "match_count": len(matches),
+        "matches": [
+            {
+                "pattern_id": pattern.pattern_id,
+                "name": pattern.name,
+                "category": pattern.category.value,
+                "severity": pattern.severity.value,
+                "confidence": round(score, 1),
+                "autonomous_safe": pattern.autonomous_safe
+            }
+            for pattern, score in matches[:10]  # Top 10 matches
+        ]
+    }
+
+
+@app.get("/api/v5/learning/autonomous-patterns")
+async def get_autonomous_safe_patterns():
+    """Get all patterns that are safe for autonomous execution"""
+    if not LEARNING_ENABLED or not knowledge_base:
+        return {"error": "Knowledge base not available"}
+    
+    patterns = knowledge_base.get_autonomous_safe_patterns()
+    
+    # Group by category
+    by_category = {}
+    for p in patterns:
+        cat = p.category.value
+        if cat not in by_category:
+            by_category[cat] = []
+        by_category[cat].append({
+            "id": p.pattern_id,
+            "name": p.name,
+            "severity": p.severity.value
+        })
+    
+    return {
+        "total_autonomous_safe": len(patterns),
+        "by_category": by_category
+    }
+
+
+@app.get("/api/v5/learning/engine-stats")
+async def get_learning_engine_stats():
+    """Get detailed learning engine statistics"""
+    if not LEARNING_ENABLED or not learning_engine:
+        return {"error": "Learning engine not available"}
+    
+    return learning_engine.get_learning_stats()
+
+
+@app.post("/api/v5/learning/record-outcome")
+async def record_action_outcome(
+    pattern_id: str,
+    action_type: str,
+    success: bool,
+    autonomous: bool = False,
+    resolution_time_seconds: int = 0
+):
+    """Record an action outcome for learning"""
+    if not LEARNING_ENABLED or not learning_engine:
+        return {"error": "Learning engine not available"}
+    
+    outcome = {
+        "pattern_id": pattern_id,
+        "action_type": action_type,
+        "success": success,
+        "autonomous": autonomous,
+        "resolution_time_seconds": resolution_time_seconds
+    }
+    
+    learning_engine.record_outcome(outcome)
+    
+    return {"success": True, "message": "Outcome recorded for learning"}
 
 # ============================================================================
 # Run Application

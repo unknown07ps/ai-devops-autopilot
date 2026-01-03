@@ -10,16 +10,16 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
 
-from database import get_db
-from auth import (
+from src.database import get_db
+from src.auth import (
     create_user, authenticate_user, create_user_session,
     get_current_user, refresh_access_token, revoke_session,
     revoke_all_sessions, create_password_reset_token,
     verify_password_reset_token, reset_password,
     create_email_verification_token, verify_email_token
 )
-from models import User
-from subscription_service import get_usage_limits
+from src.models import User
+from src.subscription_service import get_usage_limits
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 security = HTTPBearer()
@@ -228,7 +228,7 @@ async def get_profile(
 ):
     """Get current user profile and subscription info - FIXED"""
     # Get subscription
-    from models import Subscription
+    from src.models import Subscription
     subscription = db.query(Subscription).filter(
         Subscription.user_id == current_user.user_id
     ).first()
