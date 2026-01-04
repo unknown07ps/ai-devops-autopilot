@@ -52,6 +52,13 @@ class AutonomousExecutor:
         self.knowledge_base = knowledge_base
         self.learning_engine = learning_engine
         
+        # Decision logger for explainable AI
+        try:
+            from src.analytics.decision_logger import DecisionLogger
+            self.decision_logger = DecisionLogger(redis_client)
+        except ImportError:
+            self.decision_logger = None
+        
         # Add lock for thread safety
         self._action_lock = asyncio.Lock()
         
@@ -82,20 +89,42 @@ class AutonomousExecutor:
         action: Dict,
         incident: Dict,
         analysis: Dict,
-        similar_incidents: List[Dict] = None
+        similar_incidents: List[Dict] = None,
+        pattern_info: Dict = None
     ) -> Tuple[bool, float, str]:
         """
         Evaluate if action should be executed autonomously
         Returns: (should_execute, confidence, reasoning)
+        Now with full explainable AI logging
         """
         
         # Check if in autonomous mode
         if not self._is_autonomous_mode_active():
             return False, 0, "Autonomous mode not active"
         
+        # Collect safety check results for logging
+        safety_checks = []
+        
         # Safety checks first (hard stops)
         safety_passed, safety_reason = await self._check_safety_rails(action)
+        safety_checks.append({
+            'name': 'Safety Rails',
+            'passed': safety_passed,
+            'result': 'Passed' if safety_passed else safety_reason
+        })
+        
         if not safety_passed:
+            # Log denied decision
+            if self.decision_logger:
+                self.decision_logger.log_decision(
+                    incident=incident,
+                    action=action,
+                    decision="denied",
+                    confidence=0,
+                    confidence_breakdown={'safety_failed': True, 'reason': safety_reason},
+                    execution_mode=self.execution_mode.value,
+                    safety_checks=safety_checks
+                )
             return False, 0, f"Safety check failed: {safety_reason}"
         
         # Calculate confidence score from multiple sources
@@ -105,27 +134,80 @@ class AutonomousExecutor:
             action, similar_incidents
         )
         
-        # Weighted combination
+        # Get pattern-based confidence from learning engine (NEW)
+        pattern_confidence = 0
+        pattern_autonomous_safe = False
+        pattern_promoted = False
+        if pattern_info and self.learning_engine:
+            pattern_id = pattern_info.get('pattern_id')
+            if pattern_id:
+                pattern_confidence = self.learning_engine.get_pattern_confidence(pattern_id, 50.0)
+                is_safe, _ = self.learning_engine.is_autonomous_safe(pattern_id)
+                pattern_autonomous_safe = is_safe
+                pattern_stats = self.learning_engine.pattern_stats.get(pattern_id)
+                if pattern_stats:
+                    pattern_promoted = pattern_stats.is_promoted
+        
+        # Weighted combination (now includes pattern weight)
         overall_confidence = (
             rule_confidence * self.rule_weight +
             ai_confidence * self.ai_weight +
-            historical_confidence * self.historical_weight
+            historical_confidence * self.historical_weight +
+            pattern_confidence * self.pattern_weight
         )
         
-        # Decision reasoning
+        # Build detailed confidence breakdown for logging
+        confidence_breakdown = {
+            'rule_confidence': rule_confidence,
+            'rule_weight': self.rule_weight,
+            'ai_confidence': ai_confidence,
+            'ai_weight': self.ai_weight,
+            'historical_confidence': historical_confidence,
+            'historical_weight': self.historical_weight,
+            'pattern_confidence': pattern_confidence,
+            'pattern_weight': self.pattern_weight,
+            'pattern_name': pattern_info.get('pattern_name') if pattern_info else None,
+            'pattern_autonomous_safe': pattern_autonomous_safe,
+            'pattern_promoted': pattern_promoted,
+            'risk_level': action.get('risk', 'medium'),
+            'ai_recommended': ai_confidence >= 60,
+            'similar_incidents_count': len(similar_incidents) if similar_incidents else 0,
+            'root_cause_identified': 'root_cause' in analysis,
+            'root_cause': analysis.get('root_cause', {}).get('cause', 'unknown'),
+            'critical_severity': incident.get('severity') == 'critical'
+        }
+        
+        # Decision reasoning (simple version)
         reasoning = self._build_reasoning(
             rule_confidence, ai_confidence, historical_confidence, overall_confidence
         )
         
         # Determine if should execute
         should_execute = overall_confidence >= self.confidence_threshold
+        decision = "approved" if should_execute else "denied"
         
-        print(f"[AUTONOMOUS] Action evaluation: {action['action_type']}")
-        print(f"  Rule confidence: {rule_confidence:.1f}%")
-        print(f"  AI confidence: {ai_confidence:.1f}%")
-        print(f"  Historical confidence: {historical_confidence:.1f}%")
-        print(f"  Overall confidence: {overall_confidence:.1f}%")
-        print(f"  Decision: {'EXECUTE' if should_execute else 'REQUIRE APPROVAL'}")
+        # LOG THE DECISION WITH FULL EXPLANATION
+        if self.decision_logger:
+            self.decision_logger.log_decision(
+                incident=incident,
+                action=action,
+                decision=decision,
+                confidence=overall_confidence,
+                confidence_breakdown=confidence_breakdown,
+                execution_mode=self.execution_mode.value,
+                safety_checks=safety_checks,
+                pattern_info=pattern_info,
+                similar_incidents=similar_incidents
+            )
+        else:
+            # Fallback to console logging
+            print(f"[AUTONOMOUS] Action evaluation: {action['action_type']}")
+            print(f"  Rule confidence: {rule_confidence:.1f}%")
+            print(f"  AI confidence: {ai_confidence:.1f}%")
+            print(f"  Historical confidence: {historical_confidence:.1f}%")
+            print(f"  Pattern confidence: {pattern_confidence:.1f}%")
+            print(f"  Overall confidence: {overall_confidence:.1f}%")
+            print(f"  Decision: {'EXECUTE' if should_execute else 'REQUIRE APPROVAL'}")
         
         return should_execute, overall_confidence, reasoning
     

@@ -2279,6 +2279,143 @@ async def record_action_outcome(
     
     return {"success": True, "message": "Outcome recorded for learning"}
 
+
+# ============================================================================
+# Decision Logs API - Explainable AI
+# ============================================================================
+
+# Initialize decision logger
+decision_logger = None
+try:
+    from src.analytics.decision_logger import DecisionLogger
+    decision_logger = DecisionLogger(redis_client)
+    print("[DECISION LOGGER] Initialized for explainable AI")
+except ImportError as e:
+    print(f"[DECISION LOGGER] Not available: {e}")
+
+
+@app.get("/api/v5/decisions/recent")
+async def get_recent_decisions(service: str = None, limit: int = 20):
+    """Get recent autonomous decisions with full explanations"""
+    if not decision_logger:
+        return {"error": "Decision logger not available"}
+    
+    decisions = decision_logger.get_recent_decisions(service=service, limit=limit)
+    
+    return {
+        "count": len(decisions),
+        "decisions": [
+            {
+                "id": d.decision_id,
+                "timestamp": d.timestamp,
+                "service": d.service,
+                "action": d.action_type,
+                "decision": d.decision,
+                "confidence": round(d.final_confidence, 1),
+                "threshold": d.confidence_threshold,
+                "reasoning": d.reasoning_summary,
+                "pattern_matched": d.matched_pattern,
+                "factors_for": d.factors_for[:3],  # Top 3
+                "factors_against": d.factors_against[:3],
+                "was_autonomous": d.was_autonomous,
+                "outcome": d.outcome
+            }
+            for d in decisions
+        ]
+    }
+
+
+@app.get("/api/v5/decisions/{decision_id}")
+async def get_decision_detail(decision_id: str):
+    """Get full details of a specific decision with complete reasoning trail"""
+    if not decision_logger:
+        return {"error": "Decision logger not available"}
+    
+    decision = decision_logger.get_decision(decision_id)
+    
+    if not decision:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    
+    return {
+        "decision_id": decision.decision_id,
+        "timestamp": decision.timestamp,
+        "service": decision.service,
+        "action_type": decision.action_type,
+        "incident_id": decision.incident_id,
+        
+        # Decision
+        "decision": decision.decision,
+        "final_confidence": round(decision.final_confidence, 1),
+        "confidence_threshold": decision.confidence_threshold,
+        
+        # Full reasoning
+        "reasoning_summary": decision.reasoning_summary,
+        "confidence_breakdown": decision.confidence_contributions,
+        
+        # Factors
+        "factors_for": decision.factors_for,
+        "factors_against": decision.factors_against,
+        
+        # Pattern info
+        "matched_pattern": decision.matched_pattern,
+        "pattern_confidence": decision.pattern_confidence,
+        "similar_incidents_count": decision.similar_incidents_count,
+        "historical_success_rate": round(decision.historical_success_rate * 100, 1),
+        
+        # Safety
+        "safety_checks": decision.safety_checks,
+        
+        # Execution
+        "execution_mode": decision.execution_mode,
+        "was_autonomous": decision.was_autonomous,
+        "required_approval": decision.required_approval,
+        
+        # Outcome
+        "outcome": decision.outcome,
+        "outcome_recorded_at": decision.outcome_recorded_at,
+        
+        # Human readable version
+        "human_readable": decision.to_human_readable()
+    }
+
+
+@app.get("/api/v5/decisions/{decision_id}/explain")
+async def explain_decision(decision_id: str):
+    """Get human-readable explanation of a decision"""
+    if not decision_logger:
+        return {"error": "Decision logger not available"}
+    
+    decision = decision_logger.get_decision(decision_id)
+    
+    if not decision:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    
+    return {
+        "decision_id": decision_id,
+        "explanation": decision.to_human_readable()
+    }
+
+
+@app.get("/api/v5/decisions/stats")
+async def get_decision_stats(service: str = None):
+    """Get decision statistics"""
+    if not decision_logger:
+        return {"error": "Decision logger not available"}
+    
+    return decision_logger.get_decision_stats(service)
+
+
+@app.post("/api/v5/decisions/{decision_id}/outcome")
+async def record_decision_outcome(decision_id: str, outcome: str):
+    """Record the outcome of a decision for learning feedback"""
+    if not decision_logger:
+        return {"error": "Decision logger not available"}
+    
+    decision_logger.record_outcome(decision_id, outcome)
+    
+    return {"success": True, "message": f"Outcome '{outcome}' recorded for decision {decision_id}"}
+
+
 # ============================================================================
 # Run Application
 # ============================================================================
