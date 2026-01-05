@@ -1,6 +1,7 @@
 """
 Enhanced Worker - Phase 3: Autonomous Mode (FIXED)
 Fixed: Analysis timeout, recorded_at error, proper error handling
+Now includes: Repeat Incident Elimination for automatic preventive measures
 """
 
 import asyncio
@@ -17,6 +18,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.detection.anomaly_detector import AnomalyDetector
 from src.detection.ai_analyzer import AIIncidentAnalyzer
 from src.memory.incident_memory import IncidentMemory
+
+# Import repeat incident eliminator for automatic prevention
+try:
+    from src.prevention.repeat_eliminator import RepeatIncidentEliminator
+    REPEAT_ELIMINATOR_AVAILABLE = True
+except ImportError:
+    REPEAT_ELIMINATOR_AVAILABLE = False
+    RepeatIncidentEliminator = None
 
 load_dotenv()
 
@@ -73,6 +82,17 @@ class AutonomousIncidentWorker:
         
         self.action_executor = SimpleActionExecutor(self.redis)
         self.incident_memory = IncidentMemory(self.redis)
+        
+        # Initialize repeat incident eliminator for automatic prevention
+        self.repeat_eliminator = None
+        if REPEAT_ELIMINATOR_AVAILABLE:
+            self.repeat_eliminator = RepeatIncidentEliminator(
+                self.redis,
+                action_executor=self.action_executor
+            )
+            print("[WORKER] Repeat Incident Eliminator: ENABLED")
+        else:
+            print("[WORKER] Repeat Incident Eliminator: NOT AVAILABLE")
         
         # Configuration
         self.autonomous_enabled = os.getenv("AUTONOMOUS_MODE", "false").lower() == "true"

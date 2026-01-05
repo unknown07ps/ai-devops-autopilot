@@ -560,6 +560,17 @@
             font-size: 0.75rem;
         }
 
+        .sidebar-section-header {
+            padding: 16px 20px 8px 20px;
+            margin-top: 8px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--primary);
+            border-top: 1px solid var(--border);
+        }
+
         .sidebar-footer {
             padding: 1rem;
             border-top: 1px solid var(--border);
@@ -1447,6 +1458,15 @@
                         ${renderSidebarNavItem('analytics', 'bar-chart-2', 'Analytics')}
                         ${renderSidebarNavItem('integration', 'plug', 'Integration')}
                         ${renderSidebarNavItem('subscription', 'crown', 'Subscription')}
+                        
+                        <div class="sidebar-section-header">
+                            <span>Intelligence</span>
+                        </div>
+                        ${renderSidebarNavItem('intelligence-model', 'network', 'Production Model')}
+                        ${renderSidebarNavItem('intelligence-alerts', 'bell-off', 'Alert Triage')}
+                        ${renderSidebarNavItem('intelligence-mttr', 'gauge', 'MTTR Engine')}
+                        ${renderSidebarNavItem('intelligence-timeline', 'git-commit', 'Timeline')}
+                        ${renderSidebarNavItem('intelligence-cost', 'dollar-sign', 'Cost Insights')}
                     </nav>
                     
                     ${subscription?.status !== 'active' ? `
@@ -1726,7 +1746,12 @@
                 'services': renderServicesView,
                 'analytics': renderAnalyticsView,
                 'integration': renderIntegrationView,
-                'subscription': renderSubscriptionView
+                'subscription': renderSubscriptionView,
+                'intelligence-model': renderIntelligenceModel,
+                'intelligence-alerts': renderAlertTriage,
+                'intelligence-mttr': renderMTTREngine,
+                'intelligence-timeline': renderTimelineView,
+                'intelligence-cost': renderCostInsights
             };
 
             const renderFunc = views[currentView] || renderControlCenter;
@@ -4251,6 +4276,448 @@
             setTimeout(() => {
                 showNotification(`${language} SDK: pip install deployr - agent(demo)`, 'success');
             }, 1000);
+        }
+
+        // ============================================================================
+        // INTELLIGENCE PANEL RENDER FUNCTIONS
+        // ============================================================================
+
+        function renderIntelligenceModel() {
+            return `
+                <div class="space-y-6">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h1 class="text-2xl font-bold" style="color: var(--text-primary);">
+                                <i data-lucide="network" class="inline-block mr-2" style="width: 28px; height: 28px; color: var(--primary); vertical-align: middle;"></i>
+                                Production Knowledge Model
+                            </h1>
+                            <p class="text-sm" style="color: var(--text-muted);">Living representation of production architecture and dependencies</p>
+                        </div>
+                    </div>
+
+                    <!-- Model Stats -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="card rounded-xl p-5">
+                            <div class="flex items-center gap-3 mb-2">
+                                <i data-lucide="server" style="width: 20px; height: 20px; color: var(--primary);"></i>
+                                <span class="text-sm" style="color: var(--text-muted);">Total Services</span>
+                            </div>
+                            <div class="text-3xl font-bold" style="color: var(--text-primary);">12</div>
+                        </div>
+                        <div class="card rounded-xl p-5">
+                            <div class="flex items-center gap-3 mb-2">
+                                <i data-lucide="git-branch" style="width: 20px; height: 20px; color: var(--purple);"></i>
+                                <span class="text-sm" style="color: var(--text-muted);">Dependencies</span>
+                            </div>
+                            <div class="text-3xl font-bold" style="color: var(--text-primary);">28</div>
+                        </div>
+                        <div class="card rounded-xl p-5">
+                            <div class="flex items-center gap-3 mb-2">
+                                <i data-lucide="shield-check" style="width: 20px; height: 20px; color: var(--success);"></i>
+                                <span class="text-sm" style="color: var(--text-muted);">Tier-1 Services</span>
+                            </div>
+                            <div class="text-3xl font-bold" style="color: var(--success);">4</div>
+                        </div>
+                        <div class="card rounded-xl p-5">
+                            <div class="flex items-center gap-3 mb-2">
+                                <i data-lucide="alert-triangle" style="width: 20px; height: 20px; color: var(--warning);"></i>
+                                <span class="text-sm" style="color: var(--text-muted);">Arch Drifts</span>
+                            </div>
+                            <div class="text-3xl font-bold" style="color: var(--warning);">2</div>
+                        </div>
+                    </div>
+
+                    <!-- Service Dependency Graph -->
+                    <div class="card-glow rounded-xl p-6">
+                        <h3 class="text-lg font-bold mb-4" style="color: var(--text-primary);">
+                            <i data-lucide="git-pull-request" class="inline-block mr-2" style="width: 20px; height: 20px; color: var(--primary); vertical-align: middle;"></i>
+                            Service Dependency Graph
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            ${['api-gateway', 'payment-service', 'user-service', 'order-service', 'redis-cluster', 'postgres-primary'].map((svc, i) => `
+                                <div class="bg-black bg-opacity-30 rounded-lg p-4 border border-gray-700 hover:border-primary/50 transition">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <span class="font-semibold text-white">${svc}</span>
+                                        <span class="text-xs px-2 py-1 rounded ${i < 2 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}">${i < 2 ? 'Tier 1' : 'Tier 2'}</span>
+                                    </div>
+                                    <div class="text-xs text-gray-400 mb-2">Dependencies: ${Math.floor(Math.random() * 4) + 1}</div>
+                                    <div class="text-xs text-gray-400">Dependents: ${Math.floor(Math.random() * 3)}</div>
+                                    <div class="mt-3 pt-3 border-t border-gray-700 flex justify-between text-xs">
+                                        <span style="color: var(--text-muted);">Blast Radius</span>
+                                        <span class="${i < 2 ? 'text-red-400' : 'text-green-400'}">${i < 2 ? '85%' : '25%'}</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Learning Status -->
+                    <div class="card rounded-xl p-6">
+                        <h3 class="text-lg font-bold mb-4" style="color: var(--text-primary);">
+                            <i data-lucide="brain" class="inline-block mr-2" style="width: 20px; height: 20px; color: var(--purple); vertical-align: middle;"></i>
+                            Behavioral Learning Status
+                        </h3>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                            <div>
+                                <div class="text-2xl font-bold text-primary">1,247</div>
+                                <div class="text-xs text-gray-400">Metrics Samples</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-green-400">89%</div>
+                                <div class="text-xs text-gray-400">Baseline Confidence</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-purple-400">12</div>
+                                <div class="text-xs text-gray-400">Traffic Patterns</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-warning">3h ago</div>
+                                <div class="text-xs text-gray-400">Last Update</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAlertTriage() {
+            return `
+                <div class="space-y-6">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h1 class="text-2xl font-bold" style="color: var(--text-primary);">
+                                <i data-lucide="bell-off" class="inline-block mr-2" style="width: 28px; height: 28px; color: var(--primary); vertical-align: middle;"></i>
+                                Alert Triage & Noise Suppression
+                            </h1>
+                            <p class="text-sm" style="color: var(--text-muted);">Intelligent alert filtering to reduce noise and escalate actionable incidents</p>
+                        </div>
+                    </div>
+
+                    <!-- Suppression Stats -->
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        <div class="card rounded-xl p-5">
+                            <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-muted);">Alerts Today</div>
+                            <div class="text-3xl font-bold" style="color: var(--text-primary);">847</div>
+                        </div>
+                        <div class="card rounded-xl p-5">
+                            <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-muted);">Suppressed</div>
+                            <div class="text-3xl font-bold" style="color: var(--success);">612</div>
+                            <div class="text-xs text-success mt-1">72% noise reduction</div>
+                        </div>
+                        <div class="card rounded-xl p-5">
+                            <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-muted);">Escalated</div>
+                            <div class="text-3xl font-bold" style="color: var(--warning);">42</div>
+                        </div>
+                        <div class="card rounded-xl p-5">
+                            <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-muted);">Paged</div>
+                            <div class="text-3xl font-bold" style="color: var(--error);">8</div>
+                        </div>
+                        <div class="card rounded-xl p-5">
+                            <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-muted);">Flapping</div>
+                            <div class="text-3xl font-bold" style="color: var(--purple);">15</div>
+                        </div>
+                    </div>
+
+                    <!-- Triage Rules -->
+                    <div class="card-glow rounded-xl p-6">
+                        <h3 class="text-lg font-bold mb-4" style="color: var(--text-primary);">
+                            <i data-lucide="filter" class="inline-block mr-2" style="width: 20px; height: 20px; color: var(--primary); vertical-align: middle;"></i>
+                            Suppression Rules Active
+                        </h3>
+                        <div class="space-y-3">
+                            ${[
+                    { rule: 'Duplicate Alert (5min window)', suppressed: 312, icon: 'copy' },
+                    { rule: 'Flapping Detection (5+ changes/10min)', suppressed: 89, icon: 'repeat' },
+                    { rule: 'Low Actionability (<40%)', suppressed: 156, icon: 'thumb-down' },
+                    { rule: 'Maintenance Window', suppressed: 55, icon: 'wrench' }
+                ].map(r => `
+                                <div class="flex items-center justify-between p-3 bg-black bg-opacity-30 rounded-lg">
+                                    <div class="flex items-center gap-3">
+                                        <i data-lucide="${r.icon}" style="width: 18px; height: 18px; color: var(--text-muted);"></i>
+                                        <span class="text-white">${r.rule}</span>
+                                    </div>
+                                    <span class="text-green-400 font-semibold">${r.suppressed} suppressed</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Never Suppress Patterns -->
+                    <div class="card rounded-xl p-6">
+                        <h3 class="text-lg font-bold mb-4" style="color: var(--text-primary);">
+                            <i data-lucide="shield-alert" class="inline-block mr-2" style="width: 20px; height: 20px; color: var(--error); vertical-align: middle;"></i>
+                            Never-Suppress Patterns
+                        </h3>
+                        <div class="flex flex-wrap gap-2">
+                            ${['security', 'data loss', 'corruption', 'breach', 'pii', 'payment failure', 'database down'].map(p => `
+                                <span class="px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-sm">${p}</span>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderMTTREngine() {
+            return `
+                <div class="space-y-6">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h1 class="text-2xl font-bold" style="color: var(--text-primary);">
+                                <i data-lucide="gauge" class="inline-block mr-2" style="width: 28px; height: 28px; color: var(--primary); vertical-align: middle;"></i>
+                                MTTR Acceleration Engine
+                            </h1>
+                            <p class="text-sm" style="color: var(--text-muted);">Parallel analysis to minimize Mean Time To Resolution</p>
+                        </div>
+                    </div>
+
+                    <!-- MTTR Stats -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="card-glow rounded-xl p-5">
+                            <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-muted);">Avg Resolution Time</div>
+                            <div class="text-3xl font-bold text-primary">2.4 min</div>
+                            <div class="text-xs text-green-400 mt-1">↓ 65% vs manual</div>
+                        </div>
+                        <div class="card rounded-xl p-5">
+                            <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-muted);">Parallel Speedup</div>
+                            <div class="text-3xl font-bold" style="color: var(--success);">4.2x</div>
+                        </div>
+                        <div class="card rounded-xl p-5">
+                            <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-muted);">Root Cause Accuracy</div>
+                            <div class="text-3xl font-bold" style="color: var(--purple);">94%</div>
+                        </div>
+                        <div class="card rounded-xl p-5">
+                            <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-muted);">Resolutions Today</div>
+                            <div class="text-3xl font-bold" style="color: var(--text-primary);">18</div>
+                        </div>
+                    </div>
+
+                    <!-- Analysis Strategies -->
+                    <div class="card-glow rounded-xl p-6">
+                        <h3 class="text-lg font-bold mb-4" style="color: var(--text-primary);">
+                            <i data-lucide="layers" class="inline-block mr-2" style="width: 20px; height: 20px; color: var(--primary); vertical-align: middle;"></i>
+                            Parallel Analysis Strategies
+                        </h3>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            ${[
+                    { name: 'Log Analysis', icon: 'file-text', time: '45ms', confidence: 85 },
+                    { name: 'Metric Correlation', icon: 'activity', time: '32ms', confidence: 80 },
+                    { name: 'Deployment Check', icon: 'rocket', time: '28ms', confidence: 92 },
+                    { name: 'Dependency Check', icon: 'git-branch', time: '55ms', confidence: 78 },
+                    { name: 'Pattern Matching', icon: 'search', time: '22ms', confidence: 88 },
+                    { name: 'Historical Lookup', icon: 'history', time: '38ms', confidence: 72 }
+                ].map(s => `
+                                <div class="bg-black bg-opacity-30 rounded-lg p-4 border border-gray-700">
+                                    <div class="flex items-center gap-2 mb-3">
+                                        <i data-lucide="${s.icon}" style="width: 18px; height: 18px; color: var(--primary);"></i>
+                                        <span class="font-semibold text-white">${s.name}</span>
+                                    </div>
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-gray-400">Avg Time: <span class="text-green-400">${s.time}</span></span>
+                                        <span class="text-gray-400">Conf: <span class="text-purple-400">${s.confidence}%</span></span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Pre-computed Remediations -->
+                    <div class="card rounded-xl p-6">
+                        <h3 class="text-lg font-bold mb-4" style="color: var(--text-primary);">
+                            <i data-lucide="zap" class="inline-block mr-2" style="width: 20px; height: 20px; color: var(--warning); vertical-align: middle;"></i>
+                            Speculative Remediation Plans (Pre-computed)
+                        </h3>
+                        <div class="flex flex-wrap gap-3">
+                            ${['Rollback', 'Scale Up', 'Restart', 'Circuit Breaker', 'Config Rollback'].map(p => `
+                                <span class="px-4 py-2 bg-primary/10 text-primary border border-primary/30 rounded-lg text-sm font-medium">${p}</span>
+                            `).join('')}
+                        </div>
+                        <p class="text-xs text-gray-400 mt-3">Remediation plans are pre-computed during analysis for instant execution</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderTimelineView() {
+            return `
+                <div class="space-y-6">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h1 class="text-2xl font-bold" style="color: var(--text-primary);">
+                                <i data-lucide="git-commit" class="inline-block mr-2" style="width: 28px; height: 28px; color: var(--primary); vertical-align: middle;"></i>
+                                Incident Timeline
+                            </h1>
+                            <p class="text-sm" style="color: var(--text-muted);">Unified chronological view correlating all incident events</p>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Stats -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="card rounded-xl p-5">
+                            <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-muted);">Event Sources</div>
+                            <div class="text-3xl font-bold text-primary">7</div>
+                        </div>
+                        <div class="card rounded-xl p-5">
+                            <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-muted);">Events Today</div>
+                            <div class="text-3xl font-bold" style="color: var(--text-primary);">156</div>
+                        </div>
+                        <div class="card rounded-xl p-5">
+                            <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-muted);">Root Causes Found</div>
+                            <div class="text-3xl font-bold" style="color: var(--success);">12</div>
+                        </div>
+                        <div class="card rounded-xl p-5">
+                            <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-muted);">Avg Correlation</div>
+                            <div class="text-3xl font-bold" style="color: var(--purple);">89%</div>
+                        </div>
+                    </div>
+
+                    <!-- Sample Timeline -->
+                    <div class="card-glow rounded-xl p-6">
+                        <h3 class="text-lg font-bold mb-4" style="color: var(--text-primary);">
+                            <i data-lucide="clock" class="inline-block mr-2" style="width: 20px; height: 20px; color: var(--primary); vertical-align: middle;"></i>
+                            Recent Incident Timeline
+                        </h3>
+                        <div class="relative pl-6 space-y-4">
+                            <!-- Timeline line -->
+                            <div class="absolute left-2 top-2 bottom-2 w-0.5 bg-gray-700"></div>
+                            
+                            ${[
+                    { time: '14:32:00', icon: 'rocket', color: 'warning', title: 'Deployment', desc: 'payment-service v2.3.1 deployed', tag: 'ROOT CAUSE' },
+                    { time: '14:34:15', icon: 'activity', color: 'error', title: 'Metric Anomaly', desc: 'latency_p99 = 2450ms (baseline: 250ms)', tag: '' },
+                    { time: '14:35:00', icon: 'bell', color: 'error', title: 'Alert Triggered', desc: 'High Latency Alert on payment-service', tag: '' },
+                    { time: '14:36:22', icon: 'zap', color: 'primary', title: 'Action Proposed', desc: 'Rollback to v2.3.0 (confidence: 92%)', tag: '' },
+                    { time: '14:37:00', icon: 'undo', color: 'success', title: 'Rollback Executed', desc: 'Reverted to payment-service v2.3.0', tag: '' },
+                    { time: '14:42:00', icon: 'check-circle', color: 'success', title: 'Incident Resolved', desc: 'Latency normalized, service healthy', tag: 'RESOLUTION' }
+                ].map(e => `
+                                <div class="relative flex items-start gap-4">
+                                    <div class="absolute -left-4 w-4 h-4 rounded-full bg-${e.color === 'primary' ? '[var(--primary)]' : e.color === 'success' ? 'green-500' : e.color === 'warning' ? 'yellow-500' : 'red-500'} border-2 border-gray-900" style="${e.color === 'primary' ? 'background: var(--primary);' : ''}"></div>
+                                    <div class="flex-1 bg-black bg-opacity-30 rounded-lg p-3 border border-gray-700">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <div class="flex items-center gap-2">
+                                                <i data-lucide="${e.icon}" style="width: 16px; height: 16px; color: var(--${e.color});"></i>
+                                                <span class="font-semibold text-white">${e.title}</span>
+                                                ${e.tag ? `<span class="text-xs px-2 py-0.5 rounded ${e.tag === 'ROOT CAUSE' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}">${e.tag}</span>` : ''}
+                                            </div>
+                                            <span class="text-xs text-gray-500">${e.time}</span>
+                                        </div>
+                                        <p class="text-sm text-gray-400">${e.desc}</p>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Event Sources -->
+                    <div class="card rounded-xl p-6">
+                        <h3 class="text-lg font-bold mb-4" style="color: var(--text-primary);">
+                            <i data-lucide="layers" class="inline-block mr-2" style="width: 20px; height: 20px; color: var(--purple); vertical-align: middle;"></i>
+                            Correlated Event Sources
+                        </h3>
+                        <div class="flex flex-wrap gap-3">
+                            ${['Deployments', 'Metric Anomalies', 'Alerts', 'Actions', 'Decisions', 'Log Errors', 'Incident Lifecycle'].map(s => `
+                                <span class="px-4 py-2 bg-purple-500/10 text-purple-400 border border-purple-500/30 rounded-lg text-sm">${s}</span>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderCostInsights() {
+            return `
+                <div class="space-y-6">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h1 class="text-2xl font-bold" style="color: var(--text-primary);">
+                                <i data-lucide="dollar-sign" class="inline-block mr-2" style="width: 28px; height: 28px; color: var(--primary); vertical-align: middle;"></i>
+                                Cloud Cost Intelligence
+                            </h1>
+                            <p class="text-sm" style="color: var(--text-muted);">Cost anomaly detection and budget monitoring</p>
+                        </div>
+                    </div>
+
+                    <!-- Cost Stats -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="card-glow rounded-xl p-5">
+                            <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-muted);">Today's Spend</div>
+                            <div class="text-3xl font-bold text-primary">$1,247</div>
+                            <div class="text-xs text-green-400 mt-1">18% under budget</div>
+                        </div>
+                        <div class="card rounded-xl p-5">
+                            <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-muted);">Monthly Budget</div>
+                            <div class="text-3xl font-bold" style="color: var(--text-primary);">$45,000</div>
+                            <div class="w-full bg-gray-700 rounded-full h-2 mt-2">
+                                <div class="bg-primary rounded-full h-2" style="width: 42%;"></div>
+                            </div>
+                        </div>
+                        <div class="card rounded-xl p-5">
+                            <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-muted);">Cost Anomalies</div>
+                            <div class="text-3xl font-bold" style="color: var(--warning);">3</div>
+                        </div>
+                        <div class="card rounded-xl p-5">
+                            <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-muted);">Savings This Month</div>
+                            <div class="text-3xl font-bold" style="color: var(--success);">$2,340</div>
+                        </div>
+                    </div>
+
+                    <!-- Cost Anomalies -->
+                    <div class="card-glow rounded-xl p-6">
+                        <h3 class="text-lg font-bold mb-4" style="color: var(--text-primary);">
+                            <i data-lucide="alert-triangle" class="inline-block mr-2" style="width: 20px; height: 20px; color: var(--warning); vertical-align: middle;"></i>
+                            Active Cost Anomalies
+                        </h3>
+                        <div class="space-y-3">
+                            ${[
+                    { type: 'Cost Spike', service: 'data-pipeline', amount: '$340/hr', severity: 'high', action: 'Scale Down Proposed' },
+                    { type: 'Zombie Resource', service: 'dev-cluster', amount: '$45/day', severity: 'medium', action: 'Terminate Proposed' },
+                    { type: 'Data Transfer', service: 'cdn-origin', amount: '$120/hr', severity: 'medium', action: 'Rate Limit Proposed' }
+                ].map(a => `
+                                <div class="flex items-center justify-between p-4 bg-black bg-opacity-30 rounded-lg border ${a.severity === 'high' ? 'border-red-500/30' : 'border-yellow-500/30'}">
+                                    <div class="flex items-center gap-4">
+                                        <div class="w-10 h-10 rounded-lg ${a.severity === 'high' ? 'bg-red-500/20' : 'bg-yellow-500/20'} flex items-center justify-center">
+                                            <i data-lucide="trending-up" style="width: 20px; height: 20px;" class="${a.severity === 'high' ? 'text-red-400' : 'text-yellow-400'}"></i>
+                                        </div>
+                                        <div>
+                                            <div class="font-semibold text-white">${a.type}: ${a.service}</div>
+                                            <div class="text-sm text-gray-400">${a.action}</div>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-lg font-bold ${a.severity === 'high' ? 'text-red-400' : 'text-yellow-400'}">${a.amount}</div>
+                                        <div class="text-xs text-gray-500">excess cost</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Budget Thresholds -->
+                    <div class="card rounded-xl p-6">
+                        <h3 class="text-lg font-bold mb-4" style="color: var(--text-primary);">
+                            <i data-lucide="target" class="inline-block mr-2" style="width: 20px; height: 20px; color: var(--primary); vertical-align: middle;"></i>
+                            Budget Alert Thresholds
+                        </h3>
+                        <div class="grid grid-cols-4 gap-4">
+                            ${[
+                    { pct: '50%', status: 'passed', color: 'green' },
+                    { pct: '75%', status: 'upcoming', color: 'yellow' },
+                    { pct: '90%', status: 'not reached', color: 'gray' },
+                    { pct: '100%', status: 'not reached', color: 'gray' }
+                ].map(t => `
+                                <div class="text-center p-4 bg-black bg-opacity-30 rounded-lg border border-${t.color}-500/30">
+                                    <div class="text-2xl font-bold text-${t.color}-400">${t.pct}</div>
+                                    <div class="text-xs text-gray-400 mt-1">${t.status}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
         // Initialize

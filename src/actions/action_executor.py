@@ -1,14 +1,24 @@
 """
 Action Executor - Phase 2: Supervised Remediation
 Executes approved fixes with safety checks and rollback capabilities
+Now integrated with ProductionExecutor for real infrastructure operations.
 """
 
 import httpx
 import asyncio
+import os
 from typing import Dict, List, Optional
 from datetime import datetime, timezone
 from enum import Enum
 import json
+
+# Import production executor for real infrastructure operations
+try:
+    from src.infrastructure.production_executor import ProductionExecutor
+    PRODUCTION_EXECUTOR_AVAILABLE = True
+except ImportError:
+    PRODUCTION_EXECUTOR_AVAILABLE = False
+    ProductionExecutor = None
 
 class ActionType(Enum):
     ROLLBACK = "rollback"
@@ -18,6 +28,11 @@ class ActionType(Enum):
     TOGGLE_FEATURE = "toggle_feature"
     CLEAR_CACHE = "clear_cache"
     KILL_CONNECTIONS = "kill_connections"
+    # New production action types
+    DRAIN_NODE = "drain_node"
+    TERMINATE_INSTANCE = "terminate_instance"
+    RDS_FAILOVER = "rds_failover"
+    ECS_REDEPLOY = "ecs_redeploy"
 
 class ActionStatus(Enum):
     PENDING = "pending"
@@ -29,12 +44,22 @@ class ActionStatus(Enum):
 
 class ActionExecutor:
     """
-    Executes remediation actions with safety checks and audit logging
+    Executes remediation actions with safety checks and audit logging.
+    Uses ProductionExecutor for real infrastructure operations when not in dry-run mode.
     """
     
     def __init__(self, redis_client):
         self.redis = redis_client
-        self.dry_run = True  # Safety first - start in dry-run mode
+        self.dry_run = os.getenv("DRY_RUN_MODE", "true").lower() == "true"
+        
+        # Initialize production executor for real operations
+        self.production_executor = None
+        if PRODUCTION_EXECUTOR_AVAILABLE:
+            self.production_executor = ProductionExecutor(redis_client)
+            self.production_executor.dry_run = self.dry_run
+            print(f"[ACTION] Production executor initialized (dry_run={self.dry_run})")
+        else:
+            print("[ACTION] Production executor not available, using simulated actions")
         
     async def propose_action(
         self,
@@ -176,7 +201,7 @@ class ActionExecutor:
     
     async def _execute_rollback(self, action: Dict) -> Dict:
         """
-        Rollback to previous version
+        Rollback to previous version using Kubernetes
         """
         service = action['service']
         target_version = action['params'].get('target_version')
@@ -191,15 +216,17 @@ class ActionExecutor:
                 "estimated_duration_seconds": 120
             }
         
-        # In production, this would call your deployment system
-        # Examples:
-        # - kubectl set image deployment/{service} app={target_version}
-        # - aws ecs update-service --force-new-deployment
-        # - helm rollback {service} {revision}
+        # Use ProductionExecutor for real rollback
+        if self.production_executor:
+            result = await self.production_executor.execute_action(
+                "rollback",
+                service,
+                {"deployment": service, "revision": action['params'].get('revision')}
+            )
+            return result
         
-        # Simulate deployment
+        # Fallback simulation
         await asyncio.sleep(2)
-        
         return {
             "success": True,
             "message": f"Rolled back {service} to {target_version}",
@@ -210,7 +237,7 @@ class ActionExecutor:
     
     async def _execute_scale_up(self, action: Dict) -> Dict:
         """
-        Scale up service replicas
+        Scale up service replicas using Kubernetes
         """
         service = action['service']
         current_replicas = action['params'].get('current_replicas', 3)
@@ -226,11 +253,20 @@ class ActionExecutor:
                 "estimated_duration_seconds": 30
             }
         
-        # In production:
-        # kubectl scale deployment/{service} --replicas={target_replicas}
+        # Use ProductionExecutor for real scaling
+        if self.production_executor:
+            result = await self.production_executor.execute_action(
+                "scale_up",
+                service,
+                {"deployment": service, "replicas": target_replicas}
+            )
+            if result.get("success"):
+                result["previous_replicas"] = current_replicas
+                result["new_replicas"] = target_replicas
+            return result
         
+        # Fallback simulation
         await asyncio.sleep(1)
-        
         return {
             "success": True,
             "message": f"Scaled {service} to {target_replicas} replicas",
@@ -267,7 +303,7 @@ class ActionExecutor:
     
     async def _execute_restart(self, action: Dict) -> Dict:
         """
-        Restart service pods/containers
+        Restart service pods/containers using Kubernetes rolling restart
         """
         service = action['service']
         
@@ -280,11 +316,17 @@ class ActionExecutor:
                 "message": f"DRY RUN: Would restart {service} pods"
             }
         
-        # In production:
-        # kubectl rollout restart deployment/{service}
+        # Use ProductionExecutor for real restart
+        if self.production_executor:
+            result = await self.production_executor.execute_action(
+                "restart_service",
+                service,
+                {"deployment": service}
+            )
+            return result
         
+        # Fallback simulation
         await asyncio.sleep(2)
-        
         return {
             "success": True,
             "message": f"Restarted {service}",
