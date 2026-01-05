@@ -1,157 +1,193 @@
 {
   "incidents": [
     {
-      "id": "INC-69967",
-      "timestamp": "2026-01-04T19:33:50.560833",
-      "type": "database",
-      "title": "High connection pool exhaustion on PostgreSQL",
-      "description": "Connection pool at 95% capacity, causing slow queries",
-      "severity": "warning",
-      "service": "postgres-primary",
-      "status": "action_proposed",
-      "suggested_action": "Scale read replicas and increase pool size",
-      "confidence": 94,
-      "affected_pods": 2,
-      "metrics": {
-        "error_rate": 13.55,
-        "latency_p99": 213,
-        "cpu_usage": 89
-      }
-    },
-    {
-      "id": "INC-36823",
-      "timestamp": "2026-01-04T19:33:50.561616",
+      "id": "INC-19459",
+      "timestamp": "2026-01-04T23:20:44.492999",
       "type": "kubernetes",
       "title": "Pod CrashLoopBackOff in payment-service",
       "description": "Payment service pod is repeatedly crashing due to OOM",
       "severity": "critical",
       "service": "payment-service",
-      "status": "new",
+      "status": "action_proposed",
       "suggested_action": "Increase memory limits from 512Mi to 1Gi",
-      "confidence": 97,
-      "affected_pods": 1,
+      "confidence": 98,
+      "affected_pods": 2,
       "metrics": {
-        "error_rate": 2.01,
-        "latency_p99": 1676,
-        "cpu_usage": 66
+        "error_rate": 5.63,
+        "latency_p99": 1982,
+        "cpu_usage": 85
       }
     },
     {
-      "id": "INC-42417",
-      "timestamp": "2026-01-04T19:33:50.561938",
+      "id": "INC-28080",
+      "timestamp": "2026-01-04T23:20:44.493160",
       "type": "application",
       "title": "Memory leak detected in user-auth microservice",
       "description": "Memory usage growing 5% per hour without release",
       "severity": "warning",
       "service": "user-auth",
-      "status": "analyzing",
+      "status": "action_proposed",
       "suggested_action": "Rolling restart of service pods",
-      "confidence": 93,
-      "affected_pods": 3,
+      "confidence": 92,
+      "affected_pods": 2,
       "metrics": {
-        "error_rate": 12.52,
-        "latency_p99": 118,
-        "cpu_usage": 93
+        "error_rate": 13.03,
+        "latency_p99": 1163,
+        "cpu_usage": 69
       }
     },
     {
-      "id": "INC-91574",
-      "timestamp": "2026-01-04T19:33:50.562240",
+      "id": "INC-74496",
+      "timestamp": "2026-01-04T23:20:44.493257",
+      "type": "security",
+      "title": "Unusual API access pattern detected",
+      "description": "10x normal request rate from IP 192.168.1.100",
+      "severity": "critical",
+      "service": "security-waf",
+      "status": "action_proposed",
+      "suggested_action": "Enable rate limiting and investigate source",
+      "confidence": 86,
+      "affected_pods": 3,
+      "metrics": {
+        "error_rate": 12.63,
+        "latency_p99": 920,
+        "cpu_usage": 84
+      }
+    },
+    {
+      "id": "INC-34387",
+      "timestamp": "2026-01-04T23:20:44.493342",
+      "type": "application",
+      "title": "Memory leak detected in user-auth microservice",
+      "description": "Memory usage growing 5% per hour without release",
+      "severity": "warning",
+      "service": "user-auth",
+      "status": "new",
+      "suggested_action": "Rolling restart of service pods",
+      "confidence": 85,
+      "affected_pods": 3,
+      "metrics": {
+        "error_rate": 14.58,
+        "latency_p99": 206,
+        "cpu_usage": 80
+      }
+    },
+    {
+      "id": "INC-57363",
+      "timestamp": "2026-01-04T23:20:44.493437",
       "type": "kubernetes",
       "title": "Node NotReady in cluster-prod-03",
       "description": "Worker node kubelet stopped reporting status",
       "severity": "critical",
       "service": "k8s-cluster",
-      "status": "analyzing",
+      "status": "new",
       "suggested_action": "Drain node and restart kubelet service",
-      "confidence": 89,
-      "affected_pods": 3,
+      "confidence": 97,
+      "affected_pods": 2,
       "metrics": {
-        "error_rate": 8.37,
-        "latency_p99": 1318,
-        "cpu_usage": 62
+        "error_rate": 11.8,
+        "latency_p99": 1841,
+        "cpu_usage": 92
       }
     },
     {
-      "id": "INC-46086",
-      "timestamp": "2026-01-04T19:33:50.562476",
+      "id": "INC-82247",
+      "timestamp": "2026-01-04T23:20:44.493570",
+      "type": "cloud",
+      "title": "AWS EC2 instance unhealthy in ASG",
+      "description": "Instance i-0abc123 failed health checks 3 times",
+      "severity": "critical",
+      "service": "web-frontend-asg",
+      "status": "action_proposed",
+      "suggested_action": "Terminate unhealthy instance and let ASG replace",
+      "confidence": 86,
+      "affected_pods": 3,
+      "metrics": {
+        "error_rate": 6.18,
+        "latency_p99": 876,
+        "cpu_usage": 64
+      }
+    },
+    {
+      "id": "INC-57855",
+      "timestamp": "2026-01-04T23:20:44.493703",
       "type": "kubernetes",
       "title": "Pod CrashLoopBackOff in payment-service",
       "description": "Payment service pod is repeatedly crashing due to OOM",
       "severity": "critical",
       "service": "payment-service",
-      "status": "analyzing",
-      "suggested_action": "Increase memory limits from 512Mi to 1Gi",
-      "confidence": 95,
-      "affected_pods": 5,
-      "metrics": {
-        "error_rate": 10.33,
-        "latency_p99": 829,
-        "cpu_usage": 64
-      }
-    },
-    {
-      "id": "INC-75601",
-      "timestamp": "2026-01-04T19:33:50.562638",
-      "type": "cloud",
-      "title": "AWS EC2 instance unhealthy in ASG",
-      "description": "Instance i-0abc123 failed health checks 3 times",
-      "severity": "critical",
-      "service": "web-frontend-asg",
-      "status": "analyzing",
-      "suggested_action": "Terminate unhealthy instance and let ASG replace",
-      "confidence": 99,
-      "affected_pods": 1,
-      "metrics": {
-        "error_rate": 5.73,
-        "latency_p99": 1815,
-        "cpu_usage": 97
-      }
-    },
-    {
-      "id": "INC-69692",
-      "timestamp": "2026-01-04T19:33:50.562967",
-      "type": "network",
-      "title": "Elevated latency on API Gateway",
-      "description": "P99 latency increased from 50ms to 500ms",
-      "severity": "critical",
-      "service": "api-gateway",
       "status": "new",
-      "suggested_action": "Check upstream service health and scale if needed",
-      "confidence": 96,
+      "suggested_action": "Increase memory limits from 512Mi to 1Gi",
+      "confidence": 93,
       "affected_pods": 3,
       "metrics": {
-        "error_rate": 1.38,
-        "latency_p99": 399,
-        "cpu_usage": 66
+        "error_rate": 9.17,
+        "latency_p99": 467,
+        "cpu_usage": 90
       }
     },
     {
-      "id": "INC-26330",
-      "timestamp": "2026-01-04T19:33:50.563238",
-      "type": "cloud",
-      "title": "AWS EC2 instance unhealthy in ASG",
-      "description": "Instance i-0abc123 failed health checks 3 times",
+      "id": "INC-18639",
+      "timestamp": "2026-01-04T23:20:44.493801",
+      "type": "security",
+      "title": "Unusual API access pattern detected",
+      "description": "10x normal request rate from IP 192.168.1.100",
       "severity": "critical",
-      "service": "web-frontend-asg",
-      "status": "analyzing",
-      "suggested_action": "Terminate unhealthy instance and let ASG replace",
-      "confidence": 98,
-      "affected_pods": 5,
+      "service": "security-waf",
+      "status": "action_proposed",
+      "suggested_action": "Enable rate limiting and investigate source",
+      "confidence": 94,
+      "affected_pods": 2,
       "metrics": {
-        "error_rate": 12.12,
-        "latency_p99": 1328,
-        "cpu_usage": 90
+        "error_rate": 6.83,
+        "latency_p99": 204,
+        "cpu_usage": 63
       }
     }
   ],
   "pendingActions": [
     {
-      "id": "ACT-49814",
-      "incident_id": "INC-36823",
-      "timestamp": "2026-01-04T19:33:50.561643",
-      "action_type": "restart",
+      "id": "ACT-43840",
+      "incident_id": "INC-19459",
+      "timestamp": "2026-01-04T23:20:44.493066",
+      "action_type": "drain",
       "description": "Increase memory limits from 512Mi to 1Gi",
+      "status": "pending_approval",
+      "confidence": 98,
+      "estimated_impact": "low",
+      "rollback_available": true,
+      "requires_approval": true
+    },
+    {
+      "id": "ACT-48678",
+      "incident_id": "INC-74496",
+      "timestamp": "2026-01-04T23:20:44.493269",
+      "action_type": "config_change",
+      "description": "Enable rate limiting and investigate source",
+      "status": "pending_approval",
+      "confidence": 86,
+      "estimated_impact": "high",
+      "rollback_available": true,
+      "requires_approval": true
+    },
+    {
+      "id": "ACT-96066",
+      "incident_id": "INC-34387",
+      "timestamp": "2026-01-04T23:20:44.493353",
+      "action_type": "rollback",
+      "description": "Rolling restart of service pods",
+      "status": "pending_approval",
+      "confidence": 85,
+      "estimated_impact": "low",
+      "rollback_available": true,
+      "requires_approval": true
+    },
+    {
+      "id": "ACT-56510",
+      "incident_id": "INC-57363",
+      "timestamp": "2026-01-04T23:20:44.493447",
+      "action_type": "scale",
+      "description": "Drain node and restart kubelet service",
       "status": "pending_approval",
       "confidence": 97,
       "estimated_impact": "high",
@@ -159,11 +195,11 @@
       "requires_approval": true
     },
     {
-      "id": "ACT-21670",
-      "incident_id": "INC-42417",
-      "timestamp": "2026-01-04T19:33:50.561960",
-      "action_type": "rollback",
-      "description": "Rolling restart of service pods",
+      "id": "ACT-41761",
+      "incident_id": "INC-57855",
+      "timestamp": "2026-01-04T23:20:44.493719",
+      "action_type": "drain",
+      "description": "Increase memory limits from 512Mi to 1Gi",
       "status": "pending_approval",
       "confidence": 93,
       "estimated_impact": "high",
@@ -171,293 +207,481 @@
       "requires_approval": true
     },
     {
-      "id": "ACT-59032",
-      "incident_id": "INC-91574",
-      "timestamp": "2026-01-04T19:33:50.562271",
-      "action_type": "drain",
-      "description": "Drain node and restart kubelet service",
-      "status": "pending_approval",
-      "confidence": 89,
-      "estimated_impact": "high",
-      "rollback_available": true,
-      "requires_approval": true
-    },
-    {
-      "id": "ACT-10673",
-      "incident_id": "INC-46086",
-      "timestamp": "2026-01-04T19:33:50.562494",
+      "id": "ACT-10357",
+      "incident_id": "INC-18639",
+      "timestamp": "2026-01-04T23:20:44.493812",
       "action_type": "rollback",
-      "description": "Increase memory limits from 512Mi to 1Gi",
+      "description": "Enable rate limiting and investigate source",
       "status": "pending_approval",
-      "confidence": 95,
-      "estimated_impact": "medium",
-      "rollback_available": true,
-      "requires_approval": true
-    },
-    {
-      "id": "ACT-86825",
-      "incident_id": "INC-69692",
-      "timestamp": "2026-01-04T19:33:50.562988",
-      "action_type": "config_change",
-      "description": "Check upstream service health and scale if needed",
-      "status": "pending_approval",
-      "confidence": 96,
+      "confidence": 94,
       "estimated_impact": "low",
-      "rollback_available": true,
-      "requires_approval": true
-    },
-    {
-      "id": "ACT-24972",
-      "incident_id": "INC-26330",
-      "timestamp": "2026-01-04T19:33:50.563258",
-      "action_type": "drain",
-      "description": "Terminate unhealthy instance and let ASG replace",
-      "status": "pending_approval",
-      "confidence": 98,
-      "estimated_impact": "high",
       "rollback_available": true,
       "requires_approval": true
     }
   ],
   "outcomes": [
     {
-      "id": "OUT-6818",
-      "timestamp": "2026-01-04T19:33:50.563651",
+      "id": "OUT-2650",
+      "timestamp": "2026-01-04T23:20:44.494042",
       "action_type": "config_change",
       "success": true,
-      "confidence": 91,
-      "duration_seconds": 42
+      "confidence": 89,
+      "duration_seconds": 7
     },
     {
-      "id": "OUT-5090",
-      "timestamp": "2026-01-04T19:33:50.563666",
+      "id": "OUT-8450",
+      "timestamp": "2026-01-04T23:20:44.494051",
+      "action_type": "scale",
+      "success": true,
+      "confidence": 88,
+      "duration_seconds": 84
+    },
+    {
+      "id": "OUT-4794",
+      "timestamp": "2026-01-04T23:20:44.494057",
       "action_type": "restart",
       "success": true,
-      "confidence": 93,
-      "duration_seconds": 59
+      "confidence": 98,
+      "duration_seconds": 90
     },
     {
-      "id": "OUT-5661",
-      "timestamp": "2026-01-04T19:33:50.563673",
+      "id": "OUT-5935",
+      "timestamp": "2026-01-04T23:20:44.494061",
+      "action_type": "restart",
+      "success": true,
+      "confidence": 89,
+      "duration_seconds": 19
+    },
+    {
+      "id": "OUT-6812",
+      "timestamp": "2026-01-04T23:20:44.494067",
       "action_type": "config_change",
       "success": true,
-      "confidence": 95,
-      "duration_seconds": 52
+      "confidence": 93,
+      "duration_seconds": 34
     }
   ],
   "anomalies": [
     {
-      "id": "ANOM-3952",
-      "timestamp": "2026-01-04T19:33:50.563504",
-      "type": "traffic_surge",
-      "severity": "high",
-      "service": "logging-stack"
-    },
-    {
-      "id": "ANOM-3076",
-      "timestamp": "2026-01-04T19:33:50.563521",
-      "type": "traffic_surge",
-      "severity": "high",
-      "service": "user-auth"
-    },
-    {
-      "id": "ANOM-1346",
-      "timestamp": "2026-01-04T19:33:50.563529",
-      "type": "traffic_surge",
-      "severity": "medium",
-      "service": "inventory-db"
-    },
-    {
-      "id": "ANOM-3702",
-      "timestamp": "2026-01-04T19:33:50.563534",
-      "type": "error_burst",
-      "severity": "medium",
-      "service": "logging-stack"
-    },
-    {
-      "id": "ANOM-2204",
-      "timestamp": "2026-01-04T19:33:50.563539",
-      "type": "error_burst",
-      "severity": "medium",
-      "service": "order-service"
-    },
-    {
-      "id": "ANOM-4273",
-      "timestamp": "2026-01-04T19:33:50.563544",
-      "type": "traffic_surge",
-      "severity": "low",
-      "service": "order-service"
-    },
-    {
-      "id": "ANOM-3683",
-      "timestamp": "2026-01-04T19:33:50.563548",
+      "id": "ANOM-4500",
+      "timestamp": "2026-01-04T23:20:44.493979",
       "type": "cpu_spike",
-      "severity": "high",
-      "service": "inventory-db"
-    },
-    {
-      "id": "ANOM-9443",
-      "timestamp": "2026-01-04T19:33:50.563553",
-      "type": "traffic_surge",
-      "severity": "low",
-      "service": "inventory-db"
-    },
-    {
-      "id": "ANOM-6409",
-      "timestamp": "2026-01-04T19:33:50.563557",
-      "type": "cpu_spike",
-      "severity": "medium",
-      "service": "analytics-pipeline"
-    },
-    {
-      "id": "ANOM-3357",
-      "timestamp": "2026-01-04T19:33:50.563563",
-      "type": "traffic_surge",
-      "severity": "medium",
-      "service": "order-service"
-    },
-    {
-      "id": "ANOM-7115",
-      "timestamp": "2026-01-04T19:33:50.563591",
-      "type": "traffic_surge",
-      "severity": "high",
-      "service": "order-service"
-    },
-    {
-      "id": "ANOM-8760",
-      "timestamp": "2026-01-04T19:33:50.563597",
-      "type": "cpu_spike",
-      "severity": "low",
-      "service": "notification-worker"
-    },
-    {
-      "id": "ANOM-1640",
-      "timestamp": "2026-01-04T19:33:50.563602",
-      "type": "error_burst",
       "severity": "medium",
       "service": "user-auth"
     },
     {
-      "id": "ANOM-6814",
-      "timestamp": "2026-01-04T19:33:50.563607",
+      "id": "ANOM-1892",
+      "timestamp": "2026-01-04T23:20:44.493995",
+      "type": "error_burst",
+      "severity": "high",
+      "service": "order-service"
+    },
+    {
+      "id": "ANOM-5054",
+      "timestamp": "2026-01-04T23:20:44.494001",
+      "type": "cpu_spike",
+      "severity": "low",
+      "service": "api-gateway"
+    },
+    {
+      "id": "ANOM-8658",
+      "timestamp": "2026-01-04T23:20:44.494006",
       "type": "memory_leak",
-      "severity": "low",
-      "service": "notification-worker"
-    },
-    {
-      "id": "ANOM-4572",
-      "timestamp": "2026-01-04T19:33:50.563611",
-      "type": "memory_leak",
-      "severity": "low",
-      "service": "analytics-pipeline"
-    },
-    {
-      "id": "ANOM-9070",
-      "timestamp": "2026-01-04T19:33:50.563616",
-      "type": "traffic_surge",
-      "severity": "high",
-      "service": "user-auth"
-    },
-    {
-      "id": "ANOM-4624",
-      "timestamp": "2026-01-04T19:33:50.563620",
-      "type": "cpu_spike",
       "severity": "medium",
-      "service": "analytics-pipeline"
-    },
-    {
-      "id": "ANOM-1540",
-      "timestamp": "2026-01-04T19:33:50.563625",
-      "type": "cpu_spike",
-      "severity": "high",
       "service": "payment-service"
     },
     {
-      "id": "ANOM-3385",
-      "timestamp": "2026-01-04T19:33:50.563629",
+      "id": "ANOM-5396",
+      "timestamp": "2026-01-04T23:20:44.494010",
       "type": "cpu_spike",
       "severity": "medium",
       "service": "api-gateway"
     },
     {
-      "id": "ANOM-1882",
-      "timestamp": "2026-01-04T19:33:50.563634",
+      "id": "ANOM-4960",
+      "timestamp": "2026-01-04T23:20:44.494015",
+      "type": "error_burst",
+      "severity": "low",
+      "service": "analytics-pipeline"
+    },
+    {
+      "id": "ANOM-2873",
+      "timestamp": "2026-01-04T23:20:44.494019",
+      "type": "traffic_surge",
+      "severity": "high",
+      "service": "payment-service"
+    },
+    {
+      "id": "ANOM-9995",
+      "timestamp": "2026-01-04T23:20:44.494024",
+      "type": "traffic_surge",
+      "severity": "high",
+      "service": "notification-worker"
+    },
+    {
+      "id": "ANOM-7200",
+      "timestamp": "2026-01-04T23:20:44.494028",
+      "type": "traffic_surge",
+      "severity": "low",
+      "service": "analytics-pipeline"
+    },
+    {
+      "id": "ANOM-7286",
+      "timestamp": "2026-01-04T23:20:44.494032",
       "type": "error_burst",
       "severity": "medium",
-      "service": "analytics-pipeline"
+      "service": "order-service"
+    },
+    {
+      "id": "ANOM-8807",
+      "timestamp": "2026-01-04T23:20:44.494036",
+      "type": "cpu_spike",
+      "severity": "low",
+      "service": "api-gateway"
     }
   ],
   "services": [
     {
       "name": "api-gateway",
       "status": "healthy",
+      "category": "Core Infrastructure",
       "cpu": 45,
       "memory": 62,
-      "requests_per_sec": 1250
+      "requests_per_sec": 1250,
+      "patterns_learned": 24
     },
     {
       "name": "user-auth",
       "status": "degraded",
+      "category": "Authentication",
       "cpu": 78,
       "memory": 85,
-      "requests_per_sec": 450
+      "requests_per_sec": 450,
+      "patterns_learned": 18
     },
     {
       "name": "payment-service",
       "status": "critical",
+      "category": "Payment Processing",
       "cpu": 92,
       "memory": 95,
-      "requests_per_sec": 320
+      "requests_per_sec": 320,
+      "patterns_learned": 22
     },
     {
       "name": "order-service",
       "status": "healthy",
+      "category": "E-Commerce",
       "cpu": 35,
       "memory": 48,
-      "requests_per_sec": 890
+      "requests_per_sec": 890,
+      "patterns_learned": 16
     },
     {
       "name": "inventory-db",
       "status": "healthy",
+      "category": "Database",
       "cpu": 55,
       "memory": 72,
-      "requests_per_sec": 2100
+      "requests_per_sec": 2100,
+      "patterns_learned": 28
     },
     {
       "name": "notification-worker",
       "status": "healthy",
+      "category": "Messaging",
       "cpu": 22,
       "memory": 38,
-      "requests_per_sec": 150
+      "requests_per_sec": 150,
+      "patterns_learned": 12
     },
     {
       "name": "analytics-pipeline",
       "status": "warning",
+      "category": "Data Processing",
       "cpu": 68,
       "memory": 75,
-      "requests_per_sec": 5500
+      "requests_per_sec": 5500,
+      "patterns_learned": 20
     },
     {
       "name": "logging-stack",
       "status": "healthy",
+      "category": "Observability",
       "cpu": 42,
       "memory": 65,
-      "requests_per_sec": 8900
+      "requests_per_sec": 8900,
+      "patterns_learned": 15
+    },
+    {
+      "name": "kubernetes-cluster",
+      "status": "healthy",
+      "category": "Kubernetes",
+      "cpu": 38,
+      "memory": 52,
+      "requests_per_sec": 3200,
+      "patterns_learned": 45
+    },
+    {
+      "name": "aws-ec2-fleet",
+      "status": "healthy",
+      "category": "AWS",
+      "cpu": 44,
+      "memory": 58,
+      "requests_per_sec": 1800,
+      "patterns_learned": 35
+    },
+    {
+      "name": "aws-rds-primary",
+      "status": "healthy",
+      "category": "AWS Database",
+      "cpu": 62,
+      "memory": 78,
+      "requests_per_sec": 4500,
+      "patterns_learned": 28
+    },
+    {
+      "name": "aws-lambda-functions",
+      "status": "healthy",
+      "category": "AWS Serverless",
+      "cpu": 25,
+      "memory": 35,
+      "requests_per_sec": 12000,
+      "patterns_learned": 22
+    },
+    {
+      "name": "gcp-gke-cluster",
+      "status": "healthy",
+      "category": "GCP",
+      "cpu": 41,
+      "memory": 55,
+      "requests_per_sec": 2800,
+      "patterns_learned": 32
+    },
+    {
+      "name": "azure-aks-cluster",
+      "status": "healthy",
+      "category": "Azure",
+      "cpu": 39,
+      "memory": 51,
+      "requests_per_sec": 2400,
+      "patterns_learned": 30
+    },
+    {
+      "name": "mongodb-replica",
+      "status": "healthy",
+      "category": "NoSQL Database",
+      "cpu": 58,
+      "memory": 82,
+      "requests_per_sec": 6800,
+      "patterns_learned": 25
+    },
+    {
+      "name": "redis-cluster",
+      "status": "healthy",
+      "category": "Cache",
+      "cpu": 32,
+      "memory": 45,
+      "requests_per_sec": 25000,
+      "patterns_learned": 18
+    },
+    {
+      "name": "elasticsearch-cluster",
+      "status": "warning",
+      "category": "Search",
+      "cpu": 72,
+      "memory": 85,
+      "requests_per_sec": 3500,
+      "patterns_learned": 20
+    },
+    {
+      "name": "kafka-brokers",
+      "status": "healthy",
+      "category": "Event Streaming",
+      "cpu": 48,
+      "memory": 68,
+      "requests_per_sec": 45000,
+      "patterns_learned": 24
+    },
+    {
+      "name": "nginx-ingress",
+      "status": "healthy",
+      "category": "Load Balancer",
+      "cpu": 28,
+      "memory": 32,
+      "requests_per_sec": 18000,
+      "patterns_learned": 15
+    },
+    {
+      "name": "prometheus-server",
+      "status": "healthy",
+      "category": "Monitoring",
+      "cpu": 55,
+      "memory": 72,
+      "requests_per_sec": 8500,
+      "patterns_learned": 12
+    },
+    {
+      "name": "grafana-dashboards",
+      "status": "healthy",
+      "category": "Visualization",
+      "cpu": 18,
+      "memory": 28,
+      "requests_per_sec": 250,
+      "patterns_learned": 8
+    },
+    {
+      "name": "vault-secrets",
+      "status": "healthy",
+      "category": "Security",
+      "cpu": 22,
+      "memory": 35,
+      "requests_per_sec": 1200,
+      "patterns_learned": 16
+    },
+    {
+      "name": "istio-mesh",
+      "status": "healthy",
+      "category": "Service Mesh",
+      "cpu": 35,
+      "memory": 48,
+      "requests_per_sec": 15000,
+      "patterns_learned": 28
+    },
+    {
+      "name": "argocd-controller",
+      "status": "healthy",
+      "category": "GitOps",
+      "cpu": 25,
+      "memory": 42,
+      "requests_per_sec": 180,
+      "patterns_learned": 14
+    },
+    {
+      "name": "jenkins-ci",
+      "status": "healthy",
+      "category": "CI/CD",
+      "cpu": 65,
+      "memory": 78,
+      "requests_per_sec": 85,
+      "patterns_learned": 18
+    },
+    {
+      "name": "docker-registry",
+      "status": "healthy",
+      "category": "Container Registry",
+      "cpu": 32,
+      "memory": 55,
+      "requests_per_sec": 450,
+      "patterns_learned": 10
+    },
+    {
+      "name": "rabbitmq-cluster",
+      "status": "healthy",
+      "category": "Message Queue",
+      "cpu": 42,
+      "memory": 58,
+      "requests_per_sec": 8500,
+      "patterns_learned": 16
+    },
+    {
+      "name": "postgresql-primary",
+      "status": "healthy",
+      "category": "SQL Database",
+      "cpu": 52,
+      "memory": 75,
+      "requests_per_sec": 5200,
+      "patterns_learned": 26
+    },
+    {
+      "name": "mysql-replica",
+      "status": "healthy",
+      "category": "SQL Database",
+      "cpu": 48,
+      "memory": 68,
+      "requests_per_sec": 4800,
+      "patterns_learned": 22
+    },
+    {
+      "name": "cdn-cloudfront",
+      "status": "healthy",
+      "category": "CDN",
+      "cpu": 12,
+      "memory": 18,
+      "requests_per_sec": 125000,
+      "patterns_learned": 14
+    },
+    {
+      "name": "waf-security",
+      "status": "healthy",
+      "category": "Web Security",
+      "cpu": 28,
+      "memory": 42,
+      "requests_per_sec": 18000,
+      "patterns_learned": 20
+    },
+    {
+      "name": "cert-manager",
+      "status": "healthy",
+      "category": "TLS",
+      "cpu": 8,
+      "memory": 15,
+      "requests_per_sec": 25,
+      "patterns_learned": 8
+    },
+    {
+      "name": "harbor-registry",
+      "status": "healthy",
+      "category": "Artifact Storage",
+      "cpu": 35,
+      "memory": 52,
+      "requests_per_sec": 320,
+      "patterns_learned": 10
+    },
+    {
+      "name": "sonarqube",
+      "status": "healthy",
+      "category": "Code Quality",
+      "cpu": 45,
+      "memory": 65,
+      "requests_per_sec": 45,
+      "patterns_learned": 6
+    },
+    {
+      "name": "datadog-agent",
+      "status": "healthy",
+      "category": "APM",
+      "cpu": 15,
+      "memory": 25,
+      "requests_per_sec": 5500,
+      "patterns_learned": 12
     }
   ],
   "stats": {
-    "healthy_services": 5,
+    "healthy_services": 32,
     "degraded_services": 2,
     "critical_services": 1,
+    "total_services": 35,
     "total_incidents_today": 8,
-    "auto_remediated": 3,
+    "auto_remediated": 5,
     "pending_approval": 6
   },
   "learningStats": {
     "total_patterns": 580,
-    "autonomous_safe": 45,
+    "autonomous_safe": 145,
     "success_rate": 94,
-    "patterns_promoted": 12
+    "patterns_promoted": 48,
+    "categories": {
+      "kubernetes": 85,
+      "aws": 95,
+      "gcp": 65,
+      "azure": 55,
+      "databases": 90,
+      "networking": 70,
+      "security": 60,
+      "monitoring": 45,
+      "ci_cd": 35
+    }
   },
   "autonomousStatus": {
     "execution_mode": "supervised",

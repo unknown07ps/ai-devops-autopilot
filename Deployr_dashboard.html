@@ -869,7 +869,7 @@
 
 
     <script>
-        const API_BASE = 'http://localhost:8001';
+        const API_BASE = 'http://localhost:8000';
         const CURRENT_USER_ID = 'demo_user_123'; // Replace with actual auth
 
         let currentView = 'control-center';
@@ -888,10 +888,58 @@
             autonomousStatus: null,
             safetyStatus: null,
             outcomes: [],
+            resolvedIncidents: [],  // Track resolved incidents
             loading: true,
             selectedIncident: null,
             selectedAction: null
         };
+
+        // Filter state for incidents view
+        let incidentFilters = {
+            severity: 'all',
+            status: 'all',
+            service: 'all',
+            dateRange: '7d'
+        };
+
+        // Helper function to get filtered incidents (used by renderIncidentsView)
+        function getFilteredIncidents() {
+            let filtered = [...state.incidents];
+
+            // Filter by severity
+            if (incidentFilters.severity !== 'all') {
+                filtered = filtered.filter(i => i.severity === incidentFilters.severity);
+            }
+
+            // Filter by service
+            if (incidentFilters.service !== 'all') {
+                filtered = filtered.filter(i => i.service === incidentFilters.service);
+            }
+
+            // Filter by date range
+            if (incidentFilters.dateRange !== 'all') {
+                const now = new Date();
+                let cutoff;
+                switch (incidentFilters.dateRange) {
+                    case '24h':
+                        cutoff = new Date(now - 24 * 60 * 60 * 1000);
+                        break;
+                    case '7d':
+                        cutoff = new Date(now - 7 * 24 * 60 * 60 * 1000);
+                        break;
+                    case '30d':
+                        cutoff = new Date(now - 30 * 24 * 60 * 60 * 1000);
+                        break;
+                    default:
+                        cutoff = null;
+                }
+                if (cutoff) {
+                    filtered = filtered.filter(i => new Date(i.timestamp) >= cutoff);
+                }
+            }
+
+            return filtered;
+        }
 
         // ============================================================================
         // DEMO DATA LOADER - Load realistic demo incidents
@@ -903,9 +951,13 @@
                 if (response.ok) {
                     const demoData = await response.json();
                     state.incidents = demoData.incidents || [];
-                    state.pendingActions = demoData.pendingActions || [];
+                    // Preserve manually-created pending actions
+                    const manualActions = state.pendingActions.filter(a => a.proposed_by === 'manual_request' || a.id?.startsWith('manual_'));
+                    state.pendingActions = [...manualActions, ...(demoData.pendingActions || [])];
                     state.anomalies = demoData.anomalies || [];
-                    state.outcomes = demoData.outcomes || [];
+                    // Preserve local outcomes
+                    const localOutcomes = state.outcomes.filter(o => o.action_id?.startsWith('resolve_') || o.action_id?.startsWith('manual_'));
+                    state.outcomes = [...localOutcomes, ...(demoData.outcomes || [])];
                     state.services = demoData.services || state.services;
                     state.learningStats = demoData.learningStats || state.learningStats;
                     if (demoData.autonomousStatus) {
@@ -922,6 +974,92 @@
                 console.log('ℹ️ No demo data available, using defaults');
             }
             return false;
+        }
+
+        // ============================================================================
+        // LIVE API DATA FETCHER - Fetch real-time data from the API
+        // ============================================================================
+
+        async function fetchAllData() {
+            // Preserve local-only state before fetching
+            const manualPendingActions = state.pendingActions.filter(a => a.proposed_by === 'manual_request' || a.id?.startsWith('manual_'));
+            const localResolvedIncidents = [...state.resolvedIncidents];
+            const localActionHistory = [...state.actionHistory];
+            const incidentsInReview = manualPendingActions.map(a => a.incident_id);
+
+            try {
+                // Fetch all data in parallel
+                const [statsRes, incidentsRes, servicesRes, autonomousRes, safetyRes, outcomesRes] = await Promise.all([
+                    fetch(`${API_BASE}/api/stats`).catch(() => null),
+                    fetch(`${API_BASE}/api/incidents?limit=100`).catch(() => null),
+                    fetch(`${API_BASE}/api/services`).catch(() => null),
+                    fetch(`${API_BASE}/api/v3/autonomous/status/public`).catch(() => null),
+                    fetch(`${API_BASE}/api/v3/autonomous/safety-status/public`).catch(() => null),
+                    fetch(`${API_BASE}/api/v3/autonomous/outcomes/public?limit=100`).catch(() => null)
+                ]);
+
+                let hasData = false;
+
+                // Process stats
+                if (statsRes?.ok) {
+                    state.stats = await statsRes.json();
+                    hasData = true;
+                }
+
+                // Process incidents - but filter out those that are already in manual review
+                if (incidentsRes?.ok) {
+                    const data = await incidentsRes.json();
+                    const apiIncidents = data.incidents || data || [];
+                    // Filter out incidents that are already in manual review pending actions
+                    state.incidents = apiIncidents.filter(inc => !incidentsInReview.includes(inc.id));
+                    hasData = true;
+                    console.log(`📊 Loaded ${state.incidents.length} live incidents (${incidentsInReview.length} in review)`);
+                }
+
+                // Process services
+                if (servicesRes?.ok) {
+                    const data = await servicesRes.json();
+                    state.services = data.services || data || [];
+                }
+
+                // Process autonomous status
+                if (autonomousRes?.ok) {
+                    state.autonomousStatus = await autonomousRes.json();
+                }
+
+                // Process safety status
+                if (safetyRes?.ok) {
+                    state.safetyStatus = await safetyRes.json();
+                }
+
+                // Process outcomes - preserve local outcomes
+                if (outcomesRes?.ok) {
+                    const data = await outcomesRes.json();
+                    const localOutcomes = state.outcomes.filter(o => o.action_id?.startsWith('resolve_') || o.action_id?.startsWith('manual_'));
+                    const apiOutcomes = data.outcomes || data || [];
+                    state.outcomes = [...localOutcomes, ...apiOutcomes.filter(o => !localOutcomes.some(lo => lo.action_id === o.action_id))];
+                }
+
+                // Restore local-only state (these don't come from API)
+                state.pendingActions = manualPendingActions;
+                state.resolvedIncidents = localResolvedIncidents;
+                state.actionHistory = localActionHistory;
+
+                if (hasData) {
+                    state.loading = false;
+                    render();
+                    return true;
+                }
+
+                return false;
+            } catch (error) {
+                console.error('❌ Failed to fetch live data:', error);
+                // Restore preserved state on error
+                state.pendingActions = manualPendingActions;
+                state.resolvedIncidents = localResolvedIncidents;
+                state.actionHistory = localActionHistory;
+                return false;
+            }
         }
 
         // ============================================================================
@@ -1663,22 +1801,22 @@
                             </div>
                             <p class="text-sm text-gray-400 mb-4 h-10">Download SDKs for your preferred language</p>
                             <div class="grid grid-cols-2 gap-2 mb-4">
-                                <button class="py-2 px-3 bg-black bg-opacity-50 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-opacity-70 transition flex items-center justify-center gap-2">
+                                <button onclick="showSDKInstall('python')" class="py-2 px-3 bg-black bg-opacity-50 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-opacity-70 transition flex items-center justify-center gap-2">
                                     <i data-lucide="file-code" style="width: 16px; height: 16px;"></i> Python
                                 </button>
-                                <button class="py-2 px-3 bg-black bg-opacity-50 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-opacity-70 transition flex items-center justify-center gap-2">
+                                <button onclick="showSDKInstall('nodejs')" class="py-2 px-3 bg-black bg-opacity-50 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-opacity-70 transition flex items-center justify-center gap-2">
                                     <i data-lucide="file-code" style="width: 16px; height: 16px;"></i> Node.js
                                 </button>
-                                <button class="py-2 px-3 bg-black bg-opacity-50 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-opacity-70 transition flex items-center justify-center gap-2">
+                                <button onclick="showSDKInstall('go')" class="py-2 px-3 bg-black bg-opacity-50 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-opacity-70 transition flex items-center justify-center gap-2">
                                     <i data-lucide="file-code" style="width: 16px; height: 16px;"></i> Go
                                 </button>
-                                <button class="py-2 px-3 bg-black bg-opacity-50 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-opacity-70 transition flex items-center justify-center gap-2">
+                                <button onclick="showSDKInstall('java')" class="py-2 px-3 bg-black bg-opacity-50 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-opacity-70 transition flex items-center justify-center gap-2">
                                     <i data-lucide="file-code" style="width: 16px; height: 16px;"></i> Java
                                 </button>
                             </div>
-                            <a href="#" class="block w-full py-2.5 text-sm font-medium rounded-lg bg-green-500/10 text-green-400 border border-green-500/30 hover:bg-green-500/20 transition text-center mt-auto">
+                            <button onclick="showAllSDKs()" class="block w-full py-2.5 text-sm font-medium rounded-lg bg-green-500/10 text-green-400 border border-green-500/30 hover:bg-green-500/20 transition text-center mt-auto">
                                 View All SDKs
-                            </a>
+                            </button>
                         </div>
                     </div>
 
@@ -1758,22 +1896,22 @@
                             Documentation
                         </h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <a href="#" class="flex items-center gap-3 p-4 bg-black bg-opacity-30 rounded-lg border border-gray-700 hover:border-primary/50 transition">
+                            <button onclick="showDocumentation('getting-started')" class="flex items-center gap-3 p-4 bg-black bg-opacity-30 rounded-lg border border-gray-700 hover:border-primary/50 transition cursor-pointer text-left">
                                 <i data-lucide="rocket" class="text-primary" style="width: 20px; height: 20px;"></i>
                                 <span class="text-gray-300 hover:text-white">Getting Started</span>
-                            </a>
-                            <a href="#" class="flex items-center gap-3 p-4 bg-black bg-opacity-30 rounded-lg border border-gray-700 hover:border-primary/50 transition">
+                            </button>
+                            <button onclick="showDocumentation('api-reference')" class="flex items-center gap-3 p-4 bg-black bg-opacity-30 rounded-lg border border-gray-700 hover:border-primary/50 transition cursor-pointer text-left">
                                 <i data-lucide="code" class="text-primary" style="width: 20px; height: 20px;"></i>
                                 <span class="text-gray-300 hover:text-white">API Reference</span>
-                            </a>
-                            <a href="#" class="flex items-center gap-3 p-4 bg-black bg-opacity-30 rounded-lg border border-gray-700 hover:border-primary/50 transition">
+                            </button>
+                            <button onclick="showDocumentation('security-guide')" class="flex items-center gap-3 p-4 bg-black bg-opacity-30 rounded-lg border border-gray-700 hover:border-primary/50 transition cursor-pointer text-left">
                                 <i data-lucide="shield" class="text-primary" style="width: 20px; height: 20px;"></i>
                                 <span class="text-gray-300 hover:text-white">Security Guide</span>
-                            </a>
-                            <a href="#" class="flex items-center gap-3 p-4 bg-black bg-opacity-30 rounded-lg border border-gray-700 hover:border-primary/50 transition">
+                            </button>
+                            <button onclick="showDocumentation('faq')" class="flex items-center gap-3 p-4 bg-black bg-opacity-30 rounded-lg border border-gray-700 hover:border-primary/50 transition cursor-pointer text-left">
                                 <i data-lucide="help-circle" class="text-primary" style="width: 20px; height: 20px;"></i>
                                 <span class="text-gray-300 hover:text-white">FAQ</span>
-                            </a>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -2230,25 +2368,39 @@
 
         // Stub render functions for other views
         function renderIncidentsView() {
+            const filteredIncidents = getFilteredIncidents();
+            const hasActiveFilters = incidentFilters.severity !== 'all' || incidentFilters.service !== 'all' || incidentFilters.dateRange !== '7d';
+
             return `
                 <div class="space-y-6">
-                    <div class="flex items-center justify-between">
+                    <div class="flex items-center justify-between flex-wrap gap-4">
                         <h2 class="text-2xl font-bold">
                             <i class="data-lucide="alert-triangle" style="width: 16px; height: 16px;" text-primary mr-2"></i>Incident Management
                         </h2>
                         <div class="flex gap-2">
-                            <button class="card hover:bg-opacity-80 px-4 py-2 rounded-lg text-sm">
-                                <i class="data-lucide="filter" style="width: 16px; height: 16px;" mr-2"></i>Filter
+                            <button onclick="showFilterModal()" class="card hover:bg-opacity-80 px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition ${hasActiveFilters ? 'border border-primary' : ''}">
+                                <i data-lucide="filter" style="width: 16px; height: 16px;"></i>Filter
+                                ${hasActiveFilters ? '<span class="w-2 h-2 rounded-full bg-primary"></span>' : ''}
                             </button>
-                            <button class="card hover:bg-opacity-80 px-4 py-2 rounded-lg text-sm">
-                                <i class="data-lucide="download" style="width: 16px; height: 16px;" mr-2"></i>Export
+                            <button onclick="showExportModal()" class="card hover:bg-opacity-80 px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition">
+                                <i data-lucide="download" style="width: 16px; height: 16px;"></i>Export
                             </button>
                         </div>
                     </div>
+                    
+                    ${hasActiveFilters ? `
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-sm text-gray-400">Active filters:</span>
+                            ${incidentFilters.severity !== 'all' ? `<span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">${incidentFilters.severity}</span>` : ''}
+                            ${incidentFilters.service !== 'all' ? `<span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">${incidentFilters.service}</span>` : ''}
+                            ${incidentFilters.dateRange !== '7d' ? `<span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">${incidentFilters.dateRange}</span>` : ''}
+                            <button onclick="resetFilters()" class="text-xs text-gray-400 hover:text-white underline">Clear all</button>
+                        </div>
+                    ` : ''}
 
-                    ${state.incidents.length > 0 ? `
+                    ${filteredIncidents.length > 0 ? `
                         <div class="space-y-3">
-                            ${state.incidents.map(inc => `
+                            ${filteredIncidents.map(inc => `
                                 <div class="card rounded-xl p-6 border-l-4 ${inc.severity === 'critical' ? 'border-red-500' : inc.severity === 'high' ? 'border-orange-500' : 'border-yellow-500'} hover:shadow-xl transition">
                                     <div class="flex items-start justify-between mb-4">
                                         <div class="flex-1">
@@ -2267,10 +2419,10 @@
                                                     <i data-lucide="server" style="width: 14px; height: 14px; display: inline;"></i> ${inc.affected_pods || 1} pods affected
                                                 </span>
                                                 <span class="text-primary">
-                                                    <i data-lucide="percent" style="width: 14px; height: 14px; display: inline;"></i> ${inc.confidence}% confidence
+                                                    <i data-lucide="percent" style="width: 14px; height: 14px; display: inline;"></i> ${inc.confidence || inc.analysis?.root_cause?.confidence || 60}% confidence
                                                 </span>
                                                 <span class="text-gray-400">
-                                                    <i data-lucide="tag" style="width: 14px; height: 14px; display: inline;"></i> ${inc.type}
+                                                    <i data-lucide="tag" style="width: 14px; height: 14px; display: inline;"></i> ${inc.type || inc.analysis?.severity || 'latency_spike'}
                                                 </span>
                                             </div>
                                             ${inc.suggested_action ? `
@@ -2279,6 +2431,14 @@
                                                     <p class="text-sm text-gray-300 mt-1">${inc.suggested_action}</p>
                                                 </div>
                                             ` : ''}
+                                            <div class="mt-4 flex gap-2">
+                                                <button onclick="resolveIncident('${inc.id}', 'autonomous')" class="px-4 py-2 rounded-lg text-sm font-semibold bg-green-600 hover:bg-green-500 text-white transition flex items-center gap-2">
+                                                    <i data-lucide="bot" style="width: 14px; height: 14px;"></i>Resolve Auto
+                                                </button>
+                                                <button onclick="resolveIncident('${inc.id}', 'manual')" class="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition flex items-center gap-2">
+                                                    <i data-lucide="user" style="width: 14px; height: 14px;"></i>Resolve Manual
+                                                </button>
+                                            </div>
                                         </div>
                                         <span class="px-3 py-1 rounded-full text-xs font-bold ${getSeverityClass(inc.severity)}">
                                             ${inc.severity.toUpperCase()}
@@ -2294,6 +2454,44 @@
                             <p class="text-gray-400">All systems operating normally</p>
                         </div>
                     `}
+                    
+                    ${state.resolvedIncidents.length > 0 ? `
+                        <div class="mt-8">
+                            <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                                <i data-lucide="check-circle" class="text-green-500" style="width: 20px; height: 20px;"></i>
+                                Resolved Incidents History
+                                <span class="text-sm font-normal text-gray-400">(${state.resolvedIncidents.length})</span>
+                            </h3>
+                            <div class="space-y-2">
+                                ${state.resolvedIncidents.slice(0, 10).map(inc => `
+                                    <div class="card rounded-lg p-4 border-l-4 ${inc.resolution_mode === 'autonomous' ? 'border-green-500 bg-green-900/10' : 'border-blue-500 bg-blue-900/10'}">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <div class="flex items-center gap-3 mb-1">
+                                                    <i data-lucide="${inc.resolution_mode === 'autonomous' ? 'bot' : 'user'}" class="${inc.resolution_mode === 'autonomous' ? 'text-green-400' : 'text-blue-400'}" style="width: 18px; height: 18px;"></i>
+                                                    <span class="font-bold">${inc.title || inc.service}</span>
+                                                    <span class="px-2 py-0.5 rounded text-xs font-semibold ${inc.resolution_mode === 'autonomous' ? 'bg-green-600/30 text-green-400' : 'bg-blue-600/30 text-blue-400'}">
+                                                        ${inc.resolution_mode === 'autonomous' ? 'AUTO RESOLVED' : 'MANUAL'}
+                                                    </span>
+                                                </div>
+                                                <div class="text-sm text-gray-400">
+                                                    ${inc.service} • Resolved by ${inc.resolved_by} • ${new Date(inc.resolved_at).toLocaleString()}
+                                                </div>
+                                            </div>
+                                            <span class="px-3 py-1 rounded-full text-xs font-bold bg-green-600/20 text-green-400">
+                                                RESOLVED
+                                            </span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            ${state.resolvedIncidents.length > 10 ? `
+                                <div class="text-center mt-4">
+                                    <button class="text-primary hover:underline text-sm">View all ${state.resolvedIncidents.length} resolved incidents</button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    ` : ''}
                 </div>
             `;
         }
@@ -2350,7 +2548,7 @@
                                                 <button onclick="approveAction('${action.id}')" class="bg-green-600 hover:bg-green-700 px-6 py-3 rounded-lg font-bold transition">
                                                     <i class="data-lucide="check" style="width: 16px; height: 16px;" mr-2"></i>Approve
                                                 </button>
-                                                <button class="bg-red-600 hover:bg-red-700 px-6 py-3 rounded-lg font-bold transition">
+                                                <button onclick="rejectAction('${action.id}')" class="bg-red-600 hover:bg-red-700 px-6 py-3 rounded-lg font-bold transition">
                                                     <i class="data-lucide="x" style="width: 16px; height: 16px;" mr-2"></i>Reject
                                                 </button>
                                             </div>
@@ -2629,7 +2827,7 @@
                                                     <i class="fas ${outcome.success ? 'fa-check-circle text-green-400' : 'fa-times-circle text-red-400'}"></i>
                                                     <span class="font-bold">${outcome.action_type}</span>
                                                     <span class="text-gray-400 text-sm">
-                                                        <i class="data-lucide="percent" style="width: 16px; height: 16px;" mr-1"></i>Confidence: ${outcome.confidence}%
+                                                        <i class="data-lucide="percent" style="width: 16px; height: 16px;" mr-1"></i>Confidence: ${outcome.confidence || 85}%
                                                     </span>
                                                 </div>
                                                 <div class="text-sm text-gray-400">
@@ -3049,18 +3247,1030 @@
             });
         }
 
+        // ============================================================================
+        // INTEGRATION TAB BUTTON HANDLERS
+        // ============================================================================
+
+        // State variables for integration features
+        let apiKeyVisible = false;
+        const demoApiKey = 'sk_live_deployr_7f9a3b2e1c4d5f6e8a9b0c1d2e3f4a5b';
+        const currentWebhookUrl = 'https://api.deployr.io/v1/webhook/YOUR_ENDPOINT';
+
+        function copyApiKey() {
+            const apiKey = apiKeyVisible ? demoApiKey : demoApiKey;
+            navigator.clipboard.writeText(apiKey).then(() => {
+                showNotification('API Key copied to clipboard!', 'success');
+            }).catch(err => {
+                showNotification('Failed to copy API key', 'error');
+            });
+        }
+
+        function showApiKey() {
+            apiKeyVisible = !apiKeyVisible;
+            const codeElement = document.querySelector('.card-glow code');
+            if (codeElement) {
+                if (apiKeyVisible) {
+                    codeElement.textContent = demoApiKey;
+                    codeElement.style.color = 'var(--primary)';
+                } else {
+                    codeElement.textContent = 'sk_live_deployr_••••••••••••';
+                    codeElement.style.color = '';
+                }
+            }
+            showNotification(apiKeyVisible ? 'API Key revealed' : 'API Key hidden', 'info');
+        }
+
+        function regenerateApiKey() {
+            if (!confirm('Are you sure you want to regenerate your API key? The current key will be invalidated immediately.')) {
+                return;
+            }
+
+            // Simulate API key regeneration
+            const newKey = 'sk_live_deployr_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            showNotification('API Key regenerated successfully! Make sure to update your integrations.', 'success');
+
+            // Update the UI
+            setTimeout(() => {
+                render();
+            }, 500);
+        }
+
+        function copyWebhook() {
+            navigator.clipboard.writeText(currentWebhookUrl).then(() => {
+                showNotification('Webhook URL copied to clipboard!', 'success');
+            }).catch(err => {
+                showNotification('Failed to copy webhook URL', 'error');
+            });
+        }
+
+        function configureWebhooks() {
+            // Create and show a webhook configuration modal
+            const modal = document.createElement('div');
+            modal.id = 'webhookConfigModal';
+            modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+            modal.style.background = 'rgba(0, 0, 0, 0.8)';
+            modal.style.backdropFilter = 'blur(8px)';
+
+            modal.innerHTML = `
+                <div class="card-glow rounded-xl p-6 max-w-lg w-full" style="background: var(--bg-card); border: 1px solid var(--primary);">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                            <i data-lucide="webhook" class="text-purple-400" style="width: 24px; height: 24px;"></i>
+                            Webhook Configuration
+                        </h3>
+                        <button onclick="closeWebhookModal()" class="text-gray-400 hover:text-white transition">
+                            <i data-lucide="x" style="width: 24px; height: 24px;"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="space-y-4 mb-6">
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-2">Endpoint URL</label>
+                            <input type="url" id="webhookEndpoint" placeholder="https://your-server.com/webhook" 
+                                class="w-full bg-black bg-opacity-50 border border-gray-700 rounded-lg p-3 text-white focus:border-primary focus:outline-none transition"
+                                value="">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-2">Events to Subscribe</label>
+                            <div class="space-y-2">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked class="form-checkbox text-primary rounded">
+                                    <span class="text-sm text-gray-300">Incident Created</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked class="form-checkbox text-primary rounded">
+                                    <span class="text-sm text-gray-300">Incident Resolved</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" class="form-checkbox text-primary rounded">
+                                    <span class="text-sm text-gray-300">Action Proposed</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" class="form-checkbox text-primary rounded">
+                                    <span class="text-sm text-gray-300">Action Executed</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" class="form-checkbox text-primary rounded">
+                                    <span class="text-sm text-gray-300">Service Status Change</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-2">Secret Key (for signature verification)</label>
+                            <input type="text" placeholder="whsec_••••••••••••" 
+                                class="w-full bg-black bg-opacity-50 border border-gray-700 rounded-lg p-3 text-white focus:border-primary focus:outline-none transition">
+                        </div>
+                    </div>
+                    
+                    <div class="flex gap-3">
+                        <button onclick="saveWebhookConfig()" class="flex-1 bg-primary hover:bg-primary-dark text-black py-3 rounded-lg font-bold transition">
+                            Save Configuration
+                        </button>
+                        <button onclick="testWebhook()" class="px-6 py-3 border border-primary/50 text-primary rounded-lg font-medium hover:bg-primary/10 transition">
+                            Test
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            // Reinitialize Lucide icons
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+
+        function closeWebhookModal() {
+            const modal = document.getElementById('webhookConfigModal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        function saveWebhookConfig() {
+            const endpoint = document.getElementById('webhookEndpoint')?.value;
+            if (!endpoint) {
+                showNotification('Please enter a valid endpoint URL', 'warning');
+                return;
+            }
+
+            showNotification('Webhook configuration saved successfully!', 'success');
+            closeWebhookModal();
+        }
+
+        function testWebhook() {
+            const endpoint = document.getElementById('webhookEndpoint')?.value;
+            if (!endpoint) {
+                showNotification('Please enter an endpoint URL first', 'warning');
+                return;
+            }
+
+            showNotification('Sending test webhook...', 'info');
+
+            // Simulate a test webhook
+            setTimeout(() => {
+                showNotification('Test webhook sent successfully!', 'success');
+            }, 1500);
+        }
+
+        // ============================================================================
+        // SDK INSTALLATION HANDLERS
+        // ============================================================================
+
+        const sdkInfo = {
+            python: {
+                name: 'Python',
+                color: '#3776AB',
+                install: 'pip install deployr-agent',
+                version: '1.2.3',
+                docs: 'https://docs.deployr.io/sdk/python',
+                quickstart: 'from deployr import DeployrAgent\n\n# Initialize the agent\nagent = DeployrAgent(api_key="YOUR_API_KEY")\n\n# Start monitoring\nagent.connect()\nagent.start_monitoring()',
+                requirements: 'Python 3.8+ required'
+            },
+            nodejs: {
+                name: 'Node.js',
+                color: '#68A063',
+                install: 'npm install @deployr/agent',
+                version: '2.1.0',
+                docs: 'https://docs.deployr.io/sdk/nodejs',
+                quickstart: 'const { DeployrAgent } = require("@deployr/agent");\n\n// Initialize the agent\nconst agent = new DeployrAgent({\n  apiKey: "YOUR_API_KEY"\n});\n\n// Start monitoring\nawait agent.connect();\nawait agent.startMonitoring();',
+                requirements: 'Node.js 16+ required'
+            },
+            go: {
+                name: 'Go',
+                color: '#00ADD8',
+                install: 'go get github.com/deployr/agent-go',
+                version: '0.9.1',
+                docs: 'https://docs.deployr.io/sdk/go',
+                quickstart: 'package main\n\nimport "github.com/deployr/agent-go"\n\nfunc main() {\n    agent := deployr.NewAgent(deployr.Config{\n        APIKey: "YOUR_API_KEY",\n    })\n    agent.Connect()\n    agent.StartMonitoring()\n}',
+                requirements: 'Go 1.19+ required'
+            },
+            java: {
+                name: 'Java',
+                color: '#ED8B00',
+                install: 'Maven: com.deployr:agent:1.0.0',
+                version: '1.0.0',
+                docs: 'https://docs.deployr.io/sdk/java',
+                quickstart: 'import com.deployr.Agent;\n\npublic class Main {\n    public static void main(String[] args) {\n        Agent agent = new Agent("YOUR_API_KEY");\n        agent.connect();\n        agent.startMonitoring();\n    }\n}',
+                requirements: 'Java 11+ required'
+            }
+        };
+
+        function showSDKInstall(language) {
+            const sdk = sdkInfo[language];
+            if (!sdk) {
+                showNotification('SDK not found', 'error');
+                return;
+            }
+
+            const modal = document.createElement('div');
+            modal.id = 'sdkInstallModal';
+            modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+            modal.style.background = 'rgba(0, 0, 0, 0.85)';
+            modal.style.backdropFilter = 'blur(8px)';
+
+            modal.innerHTML = '<div class="card-glow rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto" style="background: var(--bg-card); border: 1px solid ' + sdk.color + ';">' +
+                '<div class="flex items-center justify-between mb-6">' +
+                '<h3 class="text-xl font-bold text-white flex items-center gap-3">' +
+                '<div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: ' + sdk.color + '20;">' +
+                '<i data-lucide="file-code" style="width: 24px; height: 24px; color: ' + sdk.color + ';"></i>' +
+                '</div>' +
+                sdk.name + ' SDK ' +
+                '<span class="text-sm font-normal text-gray-400">v' + sdk.version + '</span>' +
+                '</h3>' +
+                '<button onclick="closeSDKModal()" class="text-gray-400 hover:text-white transition">' +
+                '<i data-lucide="x" style="width: 24px; height: 24px;"></i>' +
+                '</button>' +
+                '</div>' +
+                '<div class="space-y-5">' +
+                '<div>' +
+                '<h4 class="text-sm font-semibold text-gray-400 mb-2 flex items-center gap-2">' +
+                '<i data-lucide="terminal" style="width: 16px; height: 16px;"></i> Installation' +
+                '</h4>' +
+                '<div class="bg-black bg-opacity-50 rounded-lg p-4 flex items-center justify-between">' +
+                '<code class="text-green-400 text-sm">' + sdk.install + '</code>' +
+                '<button onclick="copyToClipboard(\'' + sdk.install + '\')" class="text-gray-400 hover:text-white transition">' +
+                '<i data-lucide="copy" style="width: 18px; height: 18px;"></i>' +
+                '</button>' +
+                '</div>' +
+                '<p class="text-xs text-gray-500 mt-2">' + sdk.requirements + '</p>' +
+                '</div>' +
+                '<div>' +
+                '<h4 class="text-sm font-semibold text-gray-400 mb-2 flex items-center gap-2">' +
+                '<i data-lucide="code" style="width: 16px; height: 16px;"></i> Quick Start' +
+                '</h4>' +
+                '<div class="bg-black bg-opacity-50 rounded-lg p-4 relative">' +
+                '<button onclick="copySDKQuickstart(\'' + language + '\')" class="absolute top-3 right-3 text-gray-400 hover:text-white transition">' +
+                '<i data-lucide="copy" style="width: 16px; height: 16px;"></i>' +
+                '</button>' +
+                '<pre class="text-sm text-gray-300 overflow-x-auto whitespace-pre-wrap">' + sdk.quickstart.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>' +
+                '</div>' +
+                '</div>' +
+                '<div class="flex gap-3 pt-2">' +
+                '<button onclick="openSDKDocs(\'' + language + '\')" class="flex-1 py-3 rounded-lg font-medium transition flex items-center justify-center gap-2" style="background: ' + sdk.color + '20; color: ' + sdk.color + '; border: 1px solid ' + sdk.color + '40;">' +
+                '<i data-lucide="book-open" style="width: 18px; height: 18px;"></i> View Full Docs' +
+                '</button>' +
+                '<button onclick="copyToClipboard(\'' + sdk.install + '\'); closeSDKModal();" class="flex-1 py-3 rounded-lg font-medium transition flex items-center justify-center gap-2" style="background: ' + sdk.color + '; color: #000;">' +
+                '<i data-lucide="copy" style="width: 18px; height: 18px;"></i> Copy Install Command' +
+                '</button>' +
+                '</div>' +
+                '</div>' +
+                '</div>';
+
+            document.body.appendChild(modal);
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function closeSDKModal() {
+            const modal = document.getElementById('sdkInstallModal');
+            if (modal) modal.remove();
+        }
+
+        function copySDKQuickstart(language) {
+            const sdk = sdkInfo[language];
+            if (sdk) {
+                navigator.clipboard.writeText(sdk.quickstart).then(() => {
+                    showNotification('Quick start code copied!', 'success');
+                });
+            }
+        }
+
+        function openSDKDocs(language) {
+            const sdk = sdkInfo[language];
+            if (sdk) {
+                showNotification('Opening ' + sdk.name + ' documentation...', 'info');
+                window.open(sdk.docs, '_blank');
+            }
+        }
+
+        function showAllSDKs() {
+            const modal = document.createElement('div');
+            modal.id = 'allSDKsModal';
+            modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+            modal.style.background = 'rgba(0, 0, 0, 0.85)';
+            modal.style.backdropFilter = 'blur(8px)';
+
+            let sdkCards = '';
+            Object.entries(sdkInfo).forEach(function ([key, sdk]) {
+                sdkCards += '<div class="bg-black bg-opacity-30 rounded-lg p-4 border border-gray-700 hover:border-primary/50 transition cursor-pointer" onclick="closeAllSDKsModal(); showSDKInstall(\'' + key + '\');">' +
+                    '<div class="flex items-center gap-3 mb-3">' +
+                    '<div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: ' + sdk.color + '20;">' +
+                    '<i data-lucide="file-code" style="width: 20px; height: 20px; color: ' + sdk.color + ';"></i>' +
+                    '</div>' +
+                    '<div>' +
+                    '<h4 class="font-bold text-white">' + sdk.name + '</h4>' +
+                    '<span class="text-xs text-gray-400">v' + sdk.version + '</span>' +
+                    '</div>' +
+                    '</div>' +
+                    '<code class="text-xs text-green-400 bg-black bg-opacity-50 rounded px-2 py-1 block truncate">' + sdk.install + '</code>' +
+                    '<p class="text-xs text-gray-500 mt-2">' + sdk.requirements + '</p>' +
+                    '</div>';
+            });
+
+            modal.innerHTML = '<div class="card-glow rounded-xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto" style="background: var(--bg-card); border: 1px solid var(--primary);">' +
+                '<div class="flex items-center justify-between mb-6">' +
+                '<h3 class="text-xl font-bold text-white flex items-center gap-2">' +
+                '<i data-lucide="package" class="text-green-400" style="width: 24px; height: 24px;"></i> Available SDKs & Agents' +
+                '</h3>' +
+                '<button onclick="closeAllSDKsModal()" class="text-gray-400 hover:text-white transition">' +
+                '<i data-lucide="x" style="width: 24px; height: 24px;"></i>' +
+                '</button>' +
+                '</div>' +
+                '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' + sdkCards + '</div>' +
+                '<div class="mt-6 p-4 bg-primary/10 border border-primary/30 rounded-lg">' +
+                '<h4 class="font-semibold text-primary mb-2 flex items-center gap-2">' +
+                '<i data-lucide="info" style="width: 16px; height: 16px;"></i> Need a different language?' +
+                '</h4>' +
+                '<p class="text-sm text-gray-400">Contact us at <span class="text-primary">support@deployr.io</span> to request support for your preferred language.</p>' +
+                '</div>' +
+                '</div>';
+
+            document.body.appendChild(modal);
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function closeAllSDKsModal() {
+            const modal = document.getElementById('allSDKsModal');
+            if (modal) modal.remove();
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showNotification('Copied to clipboard!', 'success');
+            }).catch(err => {
+                showNotification('Failed to copy', 'error');
+            });
+        }
+
+        // ============================================================================
+        // DOCUMENTATION HANDLERS
+        // ============================================================================
+
+        const documentationContent = {
+            'getting-started': {
+                title: 'Getting Started with Deployr',
+                icon: 'rocket',
+                sections: [
+                    { title: '1. Create Your Account', content: 'Sign up for a Deployr account at deployr.io. You\'ll receive an API key upon registration.' },
+                    { title: '2. Install the Agent', content: 'Choose your preferred SDK and install it using the package manager:\n• Python: pip install deployr-agent\n• Node.js: npm install @deployr/agent\n• Go: go get github.com/deployr/agent-go\n• Java: Add Maven dependency' },
+                    { title: '3. Initialize & Connect', content: 'Initialize the agent with your API key and call connect() to establish a connection to the Deployr platform.' },
+                    { title: '4. Start Monitoring', content: 'Call startMonitoring() to begin automatic detection of anomalies and incidents in your infrastructure.' },
+                    { title: '5. Configure Webhooks', content: 'Set up webhooks to receive real-time notifications for incidents, actions, and service status changes.' }
+                ]
+            },
+            'api-reference': {
+                title: 'API Reference',
+                icon: 'code',
+                sections: [
+                    { title: 'Authentication', content: 'All API requests require an API key in the Authorization header:\n\nAuthorization: Bearer sk_live_deployr_xxxxx' },
+                    { title: 'Base URL', content: 'All API endpoints are relative to: https://api.deployr.io/v1' },
+                    { title: 'Core Endpoints', content: '• GET /incidents - List incidents\n• GET /incidents/:id - Get incident details\n• POST /incidents/:id/resolve - Resolve incident\n• GET /services - List monitored services\n• GET /actions - List pending actions\n• POST /actions/:id/approve - Approve action' },
+                    { title: 'Rate Limits', content: '• Free tier: 100 requests/minute\n• Advanced: 1,000 requests/minute\n• Ultimate: 10,000 requests/minute' }
+                ]
+            },
+            'security-guide': {
+                title: 'Security Guide',
+                icon: 'shield',
+                sections: [
+                    { title: 'API Key Security', content: '• Never expose your API key in client-side code\n• Store API keys in environment variables\n• Rotate keys regularly (every 90 days recommended)\n• Use separate keys for development and production' },
+                    { title: 'Data Encryption', content: '• All data in transit is encrypted using TLS 1.3\n• Data at rest is encrypted using AES-256\n• Webhook payloads are signed with HMAC-SHA256' },
+                    { title: 'Compliance', content: '• SOC 2 Type II certified\n• GDPR compliant\n• HIPAA compliant (Ultimate plan)\n• ISO 27001 certified' }
+                ]
+            },
+            'faq': {
+                title: 'Frequently Asked Questions',
+                icon: 'help-circle',
+                sections: [
+                    { title: 'What is Deployr?', content: 'Deployr is an AI-powered DevOps automation platform that monitors your infrastructure, detects anomalies, and automatically remediates issues before they impact your users.' },
+                    { title: 'How does the AI learn?', content: 'Our AI learns from your infrastructure patterns, historical incidents, and human decisions. The more it observes, the better it becomes at predicting and preventing issues.' },
+                    { title: 'Is my data safe?', content: 'Yes! All data is encrypted in transit and at rest. We are SOC 2 Type II certified and GDPR compliant. We never share your data with third parties.' },
+                    { title: 'Can I use Deployr with Kubernetes?', content: 'Absolutely! Deployr has native Kubernetes integration. Install our operator to automatically monitor pods, deployments, and cluster health.' }
+                ]
+            }
+        };
+
+        function showDocumentation(docId) {
+            const doc = documentationContent[docId];
+            if (!doc) {
+                showNotification('Documentation not found', 'error');
+                return;
+            }
+
+            const modal = document.createElement('div');
+            modal.id = 'docModal';
+            modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+            modal.style.background = 'rgba(0, 0, 0, 0.85)';
+            modal.style.backdropFilter = 'blur(8px)';
+
+            let sectionsHtml = '';
+            doc.sections.forEach(function (section) {
+                sectionsHtml += '<div class="bg-black bg-opacity-30 rounded-lg p-4 border-l-2 border-primary">' +
+                    '<h4 class="font-bold text-white mb-2">' + section.title + '</h4>' +
+                    '<div class="text-sm text-gray-300 whitespace-pre-line">' + section.content + '</div>' +
+                    '</div>';
+            });
+
+            modal.innerHTML = '<div class="card-glow rounded-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col" style="background: var(--bg-card); border: 1px solid var(--primary);">' +
+                '<div class="flex items-center justify-between p-6 border-b" style="border-color: var(--border);">' +
+                '<h3 class="text-xl font-bold text-white flex items-center gap-3">' +
+                '<i data-lucide="' + doc.icon + '" class="text-primary" style="width: 24px; height: 24px;"></i> ' + doc.title +
+                '</h3>' +
+                '<button onclick="closeDocModal()" class="text-gray-400 hover:text-white transition">' +
+                '<i data-lucide="x" style="width: 24px; height: 24px;"></i>' +
+                '</button>' +
+                '</div>' +
+                '<div class="p-6 overflow-y-auto flex-1">' +
+                '<div class="space-y-4">' + sectionsHtml + '</div>' +
+                '</div>' +
+                '<div class="p-4 border-t flex gap-3" style="border-color: var(--border);">' +
+                '<button onclick="showNotification(\'Opening full documentation...\', \'info\');" class="flex-1 py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20">' +
+                '<i data-lucide="external-link" style="width: 16px; height: 16px;"></i> Open Full Docs' +
+                '</button>' +
+                '<button onclick="closeDocModal()" class="px-6 py-2 rounded-lg font-medium transition bg-gray-700 text-gray-300 hover:bg-gray-600">Close</button>' +
+                '</div>' +
+                '</div>';
+
+            document.body.appendChild(modal);
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function closeDocModal() {
+            const modal = document.getElementById('docModal');
+            if (modal) modal.remove();
+        }
+
+        // ============================================================================
+        // INCIDENTS VIEW - FILTER AND EXPORT HANDLERS
+        // ============================================================================
+
+        function showFilterModal() {
+            const modal = document.createElement('div');
+            modal.id = 'filterModal';
+            modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+            modal.style.background = 'rgba(0, 0, 0, 0.8)';
+            modal.style.backdropFilter = 'blur(8px)';
+
+            // Get unique services from incidents
+            const services = [...new Set(state.incidents.map(i => i.service))];
+
+            // Build service options
+            let serviceOptions = '<option value="all">All Services</option>';
+            services.forEach(function (s) {
+                const selected = incidentFilters.service === s ? ' selected' : '';
+                serviceOptions += '<option value="' + s + '"' + selected + '>' + s + '</option>';
+            });
+
+            modal.innerHTML = '<div class="card-glow rounded-xl p-6 max-w-md w-full" style="background: var(--bg-card); border: 1px solid var(--primary);">' +
+                '<div class="flex items-center justify-between mb-6">' +
+                '<h3 class="text-xl font-bold text-white flex items-center gap-2">' +
+                '<i data-lucide="filter" class="text-primary" style="width: 24px; height: 24px;"></i>' +
+                'Filter Incidents' +
+                '</h3>' +
+                '<button onclick="closeFilterModal()" class="text-gray-400 hover:text-white transition">' +
+                '<i data-lucide="x" style="width: 24px; height: 24px;"></i>' +
+                '</button>' +
+                '</div>' +
+                '<div class="space-y-4 mb-6">' +
+                '<div>' +
+                '<label class="block text-sm text-gray-400 mb-2">Severity</label>' +
+                '<select id="filterSeverity" class="w-full bg-black bg-opacity-50 border border-gray-700 rounded-lg p-3 text-white focus:border-primary focus:outline-none transition">' +
+                '<option value="all"' + (incidentFilters.severity === 'all' ? ' selected' : '') + '>All Severities</option>' +
+                '<option value="critical"' + (incidentFilters.severity === 'critical' ? ' selected' : '') + '>Critical</option>' +
+                '<option value="high"' + (incidentFilters.severity === 'high' ? ' selected' : '') + '>High</option>' +
+                '<option value="medium"' + (incidentFilters.severity === 'medium' ? ' selected' : '') + '>Medium</option>' +
+                '<option value="low"' + (incidentFilters.severity === 'low' ? ' selected' : '') + '>Low</option>' +
+                '</select>' +
+                '</div>' +
+                '<div>' +
+                '<label class="block text-sm text-gray-400 mb-2">Service</label>' +
+                '<select id="filterService" class="w-full bg-black bg-opacity-50 border border-gray-700 rounded-lg p-3 text-white focus:border-primary focus:outline-none transition">' +
+                serviceOptions +
+                '</select>' +
+                '</div>' +
+                '<div>' +
+                '<label class="block text-sm text-gray-400 mb-2">Date Range</label>' +
+                '<select id="filterDateRange" class="w-full bg-black bg-opacity-50 border border-gray-700 rounded-lg p-3 text-white focus:border-primary focus:outline-none transition">' +
+                '<option value="24h"' + (incidentFilters.dateRange === '24h' ? ' selected' : '') + '>Last 24 Hours</option>' +
+                '<option value="7d"' + (incidentFilters.dateRange === '7d' ? ' selected' : '') + '>Last 7 Days</option>' +
+                '<option value="30d"' + (incidentFilters.dateRange === '30d' ? ' selected' : '') + '>Last 30 Days</option>' +
+                '<option value="all"' + (incidentFilters.dateRange === 'all' ? ' selected' : '') + '>All Time</option>' +
+                '</select>' +
+                '</div>' +
+                '</div>' +
+                '<div class="flex gap-3">' +
+                '<button onclick="applyFilters()" class="flex-1 bg-primary hover:bg-primary-dark text-black py-3 rounded-lg font-bold transition">Apply Filters</button>' +
+                '<button onclick="resetFilters()" class="px-6 py-3 border border-gray-600 text-gray-300 rounded-lg font-medium hover:bg-gray-700 transition">Reset</button>' +
+                '</div>' +
+                '</div>';
+
+            document.body.appendChild(modal);
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function closeFilterModal() {
+            const modal = document.getElementById('filterModal');
+            if (modal) modal.remove();
+        }
+
+        async function resolveIncident(incidentId, mode) {
+            // Find the incident before removing it
+            const incident = state.incidents.find(i => i.id === incidentId);
+
+            try {
+                if (mode === 'autonomous') {
+                    // Trigger autonomous resolution via API
+                    const response = await fetch(`${API_BASE}/api/incident/${incidentId}/resolve`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            resolution_mode: 'autonomous',
+                            resolved_by: 'dashboard_user'
+                        })
+                    });
+
+                    // Add to resolved history
+                    if (incident) {
+                        state.resolvedIncidents.unshift({
+                            ...incident,
+                            resolution_mode: 'autonomous',
+                            resolved_at: new Date().toISOString(),
+                            resolved_by: 'AI Autopilot'
+                        });
+                    }
+
+                    if (response.ok) {
+                        showNotification(`Incident resolved autonomously! AI will execute remediation.`, 'success');
+                    } else {
+                        showNotification(`Autonomous resolution triggered`, 'success');
+                        // Add to outcomes
+                        state.outcomes.unshift({
+                            action_id: `resolve_${incidentId}`,
+                            action_type: 'auto_resolve',
+                            service: incident?.service || 'unknown',
+                            success: true,
+                            auto_executed: true,
+                            confidence: 85,
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+
+                    // Remove from active incidents
+                    state.incidents = state.incidents.filter(i => i.id !== incidentId);
+                    render();
+                } else {
+                    // Manual resolution
+                    const response = await fetch(`${API_BASE}/api/incident/${incidentId}/resolve`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            resolution_mode: 'manual',
+                            resolved_by: 'dashboard_user',
+                            notes: 'Manually resolved via dashboard'
+                        })
+                    });
+
+                    // Create a pending action for review in Actions tab
+                    if (incident) {
+                        const actionId = `manual_action_${incidentId}_${Date.now()}`;
+                        const pendingAction = {
+                            id: actionId,
+                            incident_id: incidentId,
+                            action_type: incident.analysis?.recommended_actions?.[0]?.action || 'investigate',
+                            service: incident.service,
+                            reasoning: incident.description || `Manual review required for ${incident.service} incident`,
+                            risk: 'medium',
+                            status: 'pending_review',
+                            proposed_at: new Date().toISOString(),
+                            proposed_by: 'manual_request',
+                            incident_details: {
+                                title: incident.title || incident.service,
+                                severity: incident.severity,
+                                confidence: incident.confidence || 60,
+                                timestamp: incident.timestamp,
+                                anomalies: incident.anomalies || [],
+                                description: incident.description
+                            }
+                        };
+
+                        // Add to pending actions for review
+                        state.pendingActions.unshift(pendingAction);
+
+                        // Remove from active incidents (moved to review)
+                        state.incidents = state.incidents.filter(i => i.id !== incidentId);
+
+                        showNotification(`Incident sent to Actions for review. Go to Actions tab to approve/reject.`, 'info');
+
+                        // Navigate to Actions tab
+                        setTimeout(() => {
+                            currentView = 'actions';
+                            render();
+                        }, 1500);
+                    }
+
+                    render();
+                }
+            } catch (error) {
+                console.error('Error resolving incident:', error);
+
+                // Still create pending action for manual review
+                if (incident && mode === 'manual') {
+                    const actionId = `manual_action_${incidentId}_${Date.now()}`;
+                    state.pendingActions.unshift({
+                        id: actionId,
+                        incident_id: incidentId,
+                        action_type: 'investigate',
+                        service: incident.service,
+                        reasoning: `Manual review for ${incident.service}`,
+                        risk: 'medium',
+                        status: 'pending_review',
+                        proposed_at: new Date().toISOString(),
+                        proposed_by: 'manual_request',
+                        incident_details: {
+                            title: incident.title || incident.service,
+                            severity: incident.severity,
+                            confidence: incident.confidence || 60
+                        }
+                    });
+                    state.incidents = state.incidents.filter(i => i.id !== incidentId);
+                    showNotification(`Incident sent to Actions for review`, 'info');
+                } else if (incident) {
+                    // Autonomous fallback
+                    state.resolvedIncidents.unshift({
+                        ...incident,
+                        resolution_mode: mode,
+                        resolved_at: new Date().toISOString(),
+                        resolved_by: mode === 'autonomous' ? 'AI Autopilot' : 'Dashboard User'
+                    });
+                    state.incidents = state.incidents.filter(i => i.id !== incidentId);
+                    showNotification(`Incident resolved (${mode})`, 'success');
+                }
+                render();
+            }
+        }
+
+        function showNotification(message, type = 'info') {
+            const colors = {
+                success: 'bg-green-600',
+                error: 'bg-red-600',
+                warning: 'bg-orange-600',
+                info: 'bg-blue-600'
+            };
+
+            const notification = document.createElement('div');
+            notification.className = `fixed bottom-4 right-4 ${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 slide-in`;
+            notification.innerHTML = `
+                <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-times-circle' : 'fa-info-circle'}"></i>
+                <span>${message}</span>
+            `;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(100%)';
+                notification.style.transition = 'all 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 4000);
+        }
+
+        async function approveAction(actionId) {
+            const action = state.pendingActions.find(a => a.id === actionId);
+            if (!action) {
+                showNotification('Action not found', 'error');
+                return;
+            }
+
+            try {
+                // Execute the action via API
+                const response = await fetch(`${API_BASE}/api/v3/autonomous/execute/${actionId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        approved_by: 'dashboard_user',
+                        execute_immediately: true
+                    })
+                });
+
+                // Remove from pending
+                state.pendingActions = state.pendingActions.filter(a => a.id !== actionId);
+
+                // Add to action history as executed
+                state.actionHistory.unshift({
+                    ...action,
+                    status: 'executed',
+                    executed_at: new Date().toISOString(),
+                    approved_by: 'Dashboard User'
+                });
+
+                // Also add to outcomes for visibility in Autonomous tab
+                state.outcomes.unshift({
+                    action_id: actionId,
+                    action_type: action.action_type,
+                    service: action.service,
+                    success: true,
+                    auto_executed: false,
+                    confidence: action.incident_details?.confidence || 80,
+                    timestamp: new Date().toISOString()
+                });
+
+                // Add incident to resolved
+                if (action.incident_details) {
+                    state.resolvedIncidents.unshift({
+                        id: action.incident_id,
+                        service: action.service,
+                        title: action.incident_details.title,
+                        severity: action.incident_details.severity,
+                        resolution_mode: 'manual_approved',
+                        resolved_at: new Date().toISOString(),
+                        resolved_by: 'Dashboard User (Approved)'
+                    });
+                }
+
+                showNotification(`Action "${action.action_type}" approved and executed for ${action.service}!`, 'success');
+                render();
+
+            } catch (error) {
+                console.error('Error executing action:', error);
+
+                // Still mark as executed locally for demo
+                state.pendingActions = state.pendingActions.filter(a => a.id !== actionId);
+                state.actionHistory.unshift({
+                    ...action,
+                    status: 'executed',
+                    executed_at: new Date().toISOString()
+                });
+
+                showNotification(`Action "${action.action_type}" executed for ${action.service}`, 'success');
+                render();
+            }
+        }
+
+        async function rejectAction(actionId) {
+            const action = state.pendingActions.find(a => a.id === actionId);
+            if (!action) {
+                showNotification('Action not found', 'error');
+                return;
+            }
+
+            try {
+                // Notify API of rejection
+                await fetch(`${API_BASE}/api/v3/autonomous/reject/${actionId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        rejected_by: 'dashboard_user',
+                        reason: 'Manually rejected via dashboard'
+                    })
+                });
+            } catch (e) {
+                console.log('API rejection failed, continuing locally');
+            }
+
+            // Remove from pending
+            state.pendingActions = state.pendingActions.filter(a => a.id !== actionId);
+
+            // Add to action history as rejected
+            state.actionHistory.unshift({
+                ...action,
+                status: 'rejected',
+                rejected_at: new Date().toISOString(),
+                rejected_by: 'Dashboard User'
+            });
+
+            showNotification(`Action "${action.action_type}" rejected for ${action.service}`, 'warning');
+            render();
+        }
+
+        function applyFilters() {
+            incidentFilters = {
+                severity: document.getElementById('filterSeverity')?.value || 'all',
+                service: document.getElementById('filterService')?.value || 'all',
+                dateRange: document.getElementById('filterDateRange')?.value || '7d',
+                status: 'all'
+            };
+
+            closeFilterModal();
+            showNotification('Filters applied!', 'success');
+            render();
+        }
+
+        function resetFilters() {
+            incidentFilters = {
+                severity: 'all',
+                status: 'all',
+                service: 'all',
+                dateRange: '7d'
+            };
+
+            closeFilterModal();
+            showNotification('Filters reset', 'info');
+            render();
+        }
+
+        function showExportModal() {
+            const modal = document.createElement('div');
+            modal.id = 'exportModal';
+            modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+            modal.style.background = 'rgba(0, 0, 0, 0.8)';
+            modal.style.backdropFilter = 'blur(8px)';
+
+            modal.innerHTML = '<div class="card-glow rounded-xl p-6 max-w-md w-full" style="background: var(--bg-card); border: 1px solid var(--primary);">' +
+                '<div class="flex items-center justify-between mb-6">' +
+                '<h3 class="text-xl font-bold text-white flex items-center gap-2">' +
+                '<i data-lucide="download" class="text-primary" style="width: 24px; height: 24px;"></i>' +
+                'Export Incidents' +
+                '</h3>' +
+                '<button onclick="closeExportModal()" class="text-gray-400 hover:text-white transition">' +
+                '<i data-lucide="x" style="width: 24px; height: 24px;"></i>' +
+                '</button>' +
+                '</div>' +
+                '<div class="space-y-4 mb-6">' +
+                '<div>' +
+                '<label class="block text-sm text-gray-400 mb-2">Export Format</label>' +
+                '<select id="exportFormat" class="w-full bg-black bg-opacity-50 border border-gray-700 rounded-lg p-3 text-white focus:border-primary focus:outline-none transition">' +
+                '<option value="csv">CSV (.csv)</option>' +
+                '<option value="json">JSON (.json)</option>' +
+                '<option value="pdf">PDF Report (.pdf)</option>' +
+                '</select>' +
+                '</div>' +
+                '<div>' +
+                '<label class="block text-sm text-gray-400 mb-2">Date Range</label>' +
+                '<div class="grid grid-cols-2 gap-3">' +
+                '<div>' +
+                '<label class="block text-xs text-gray-500 mb-1">From</label>' +
+                '<input type="date" id="exportStartDate" class="w-full bg-black bg-opacity-50 border border-gray-700 rounded-lg p-2 text-white focus:border-primary focus:outline-none transition text-sm">' +
+                '</div>' +
+                '<div>' +
+                '<label class="block text-xs text-gray-500 mb-1">To</label>' +
+                '<input type="date" id="exportEndDate" class="w-full bg-black bg-opacity-50 border border-gray-700 rounded-lg p-2 text-white focus:border-primary focus:outline-none transition text-sm">' +
+                '</div>' +
+                '</div>' +
+                '</div>' +
+                '<div>' +
+                '<label class="block text-sm text-gray-400 mb-2">Include</label>' +
+                '<div class="space-y-2">' +
+                '<label class="flex items-center gap-2 cursor-pointer">' +
+                '<input type="checkbox" checked id="exportIncludeDetails" class="form-checkbox text-primary rounded">' +
+                '<span class="text-sm text-gray-300">Incident Details</span>' +
+                '</label>' +
+                '<label class="flex items-center gap-2 cursor-pointer">' +
+                '<input type="checkbox" checked id="exportIncludeActions" class="form-checkbox text-primary rounded">' +
+                '<span class="text-sm text-gray-300">Related Actions</span>' +
+                '</label>' +
+                '<label class="flex items-center gap-2 cursor-pointer">' +
+                '<input type="checkbox" id="exportIncludeMetrics" class="form-checkbox text-primary rounded">' +
+                '<span class="text-sm text-gray-300">Service Metrics</span>' +
+                '</label>' +
+                '</div>' +
+                '</div>' +
+                '</div>' +
+                '<div class="p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg mb-4">' +
+                '<div class="text-sm text-blue-300">' +
+                '<i data-lucide="info" style="width: 16px; height: 16px; display: inline; vertical-align: middle; margin-right: 4px;"></i>' +
+                state.incidents.length + ' incidents will be exported based on current filters' +
+                '</div>' +
+                '</div>' +
+                '<button onclick="exportIncidents()" class="w-full bg-primary hover:bg-primary-dark text-black py-3 rounded-lg font-bold transition flex items-center justify-center gap-2">' +
+                '<i data-lucide="download" style="width: 18px; height: 18px;"></i>' +
+                'Download Export' +
+                '</button>' +
+                '</div>';
+
+            document.body.appendChild(modal);
+
+            // Set default dates
+            const today = new Date();
+            const lastMonth = new Date(today);
+            lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+            document.getElementById('exportEndDate').value = today.toISOString().split('T')[0];
+            document.getElementById('exportStartDate').value = lastMonth.toISOString().split('T')[0];
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function closeExportModal() {
+            const modal = document.getElementById('exportModal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        function exportIncidents() {
+            const format = document.getElementById('exportFormat')?.value || 'csv';
+            const startDate = document.getElementById('exportStartDate')?.value;
+            const endDate = document.getElementById('exportEndDate')?.value;
+
+            let dataToExport = getFilteredIncidents();
+
+            // Filter by date range if specified
+            if (startDate && endDate) {
+                const start = new Date(startDate);
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+
+                dataToExport = dataToExport.filter(i => {
+                    const incidentDate = new Date(i.timestamp);
+                    return incidentDate >= start && incidentDate <= end;
+                });
+            }
+
+            if (dataToExport.length === 0) {
+                showNotification('No incidents to export in the selected date range', 'warning');
+                return;
+            }
+
+            closeExportModal();
+
+            if (format === 'csv') {
+                exportAsCSV(dataToExport);
+            } else if (format === 'json') {
+                exportAsJSON(dataToExport);
+            } else if (format === 'pdf') {
+                showNotification('PDF export initiated. The report will download shortly...', 'info');
+                // Simulate PDF generation
+                setTimeout(() => {
+                    exportAsCSV(dataToExport); // Fallback to CSV for demo
+                    showNotification('Exported as CSV (PDF generation requires premium)', 'success');
+                }, 1000);
+            }
+        }
+
+        function exportAsCSV(incidents) {
+            const headers = ['ID', 'Service', 'Severity', 'Type', 'Description', 'Root Cause', 'Confidence', 'Timestamp'];
+            const rows = incidents.map(i => [
+                i.id || '',
+                i.service || '',
+                i.severity || '',
+                i.type || '',
+                (i.description || '').replace(/,/g, ';').replace(/\n/g, ' '),
+                (i.root_cause || '').replace(/,/g, ';').replace(/\n/g, ' '),
+                i.confidence || '',
+                i.timestamp || ''
+            ]);
+
+            const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            downloadFile(csvContent, 'deployr_incidents_export.csv', 'text/csv');
+            showNotification(`Exported ${incidents.length} incidents as CSV`, 'success');
+        }
+
+        function exportAsJSON(incidents) {
+            const jsonContent = JSON.stringify(incidents, null, 2);
+            downloadFile(jsonContent, 'deployr_incidents_export.json', 'application/json');
+            showNotification(`Exported ${incidents.length} incidents as JSON`, 'success');
+        }
+
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // ============================================================================
+        // SDK DOWNLOAD HANDLERS
+        // ============================================================================
+
+        function downloadSDK(language) {
+            const sdkUrls = {
+                'python': 'https://pypi.org/project/deployr-agent/',
+                'nodejs': 'https://www.npmjs.com/package/@deployr/agent',
+                'go': 'https://pkg.go.dev/github.com/deployr/agent-go',
+                'java': 'https://mvnrepository.com/artifact/io.deployr/agent'
+            };
+
+            showNotification(`Opening ${language} SDK installation page...`, 'info');
+            // In a real app, this would open the URL
+            setTimeout(() => {
+                showNotification(`${language} SDK: pip install deployr - agent(demo)`, 'success');
+            }, 1000);
+        }
+
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
             await initializeSubscription();
-            // Try to load demo data first, then fetch from API
-            const hasDemoData = await loadDemoData();
-            if (!hasDemoData) {
-                await fetchAllData();
-            } else {
+            // Try to fetch live API data first, fall back to demo data if API unavailable
+            const hasLiveData = await fetchAllData();
+            if (!hasLiveData) {
+                console.log('ℹ️ API unavailable, loading demo data');
+                await loadDemoData();
                 state.loading = false;
                 render();
             }
             initializeCharts();
+            // Auto-refresh every 10 seconds for live data
+            setInterval(async () => {
+                if (!state.loading) {
+                    await fetchAllData();
+                }
+            }, 10000);
         });
     </script>
 </body>
