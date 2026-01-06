@@ -393,6 +393,79 @@ class AuditLog(Base):
         return f"<AuditLog {self.event_type}>"
 
 
+class ActionLog(Base):
+    """Permanent action log for all manual and autonomous actions - never auto-deleted"""
+    __tablename__ = "action_logs"
+    
+    log_id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Action identification
+    action_id = Column(String(255), index=True)
+    incident_id = Column(String(255), index=True)
+    
+    # Action details
+    action_type = Column(String(100), nullable=False)  # restart, rollback, scale_up, etc.
+    mode = Column(String(50), nullable=False)  # 'autonomous' or 'manual'
+    service = Column(String(255), index=True)
+    
+    # Status and result
+    status = Column(String(50), nullable=False)  # pending, executing, completed, failed
+    success = Column(Boolean, default=True)
+    confidence = Column(Float)
+    
+    # Details
+    description = Column(Text)
+    reason = Column(Text)
+    execution_details = Column(JSON)
+    error_message = Column(Text)
+    
+    # Actor
+    executed_by = Column(String(255))  # 'AI Autopilot' or user ID
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    executed_at = Column(DateTime(timezone=True))
+    
+    __table_args__ = (
+        Index('idx_action_log_mode', 'mode'),
+        Index('idx_action_log_service', 'service'),
+        Index('idx_action_log_status', 'status'),
+        Index('idx_action_log_created', 'created_at'),
+        Index('idx_action_log_action_type', 'action_type'),
+    )
+    
+    def __repr__(self):
+        return f"<ActionLog {self.action_type} - {self.mode}>"
+
+
+class ResolvedIncident(Base):
+    """Permanently stores resolved incident IDs - survives Redis restarts"""
+    __tablename__ = "resolved_incidents"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    incident_id = Column(String(255), unique=True, index=True, nullable=False)
+    
+    # Resolution details
+    service = Column(String(255), index=True)
+    resolution_mode = Column(String(50), nullable=False)  # 'autonomous' or 'manual'
+    resolved_by = Column(String(255))
+    
+    # Status tracking
+    status = Column(String(50), default='resolved')  # resolved, pending_action
+    
+    # Timestamps
+    resolved_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    __table_args__ = (
+        Index('idx_resolved_incident_id', 'incident_id'),
+        Index('idx_resolved_service', 'service'),
+        Index('idx_resolved_mode', 'resolution_mode'),
+    )
+    
+    def __repr__(self):
+        return f"<ResolvedIncident {self.incident_id} - {self.resolution_mode}>"
+
+
 class ApiKey(Base):
     """API keys for programmatic access"""
     __tablename__ = "api_keys"
@@ -425,3 +498,27 @@ class ApiKey(Base):
     
     def __repr__(self):
         return f"<ApiKey {self.name}>"
+
+
+class TrialEmail(Base):
+    """Tracks emails that have used free trial - ensures one trial per email"""
+    __tablename__ = "trial_emails"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    trial_started_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    trial_ended_at = Column(DateTime(timezone=True))
+    ip_address = Column(String(100))
+    user_agent = Column(String(500))
+    
+    # Status tracking
+    trial_status = Column(String(50), default='active')  # active, expired, converted
+    converted_to_paid = Column(Boolean, default=False)
+    
+    __table_args__ = (
+        Index('idx_trial_email', 'email'),
+        Index('idx_trial_status', 'trial_status'),
+    )
+    
+    def __repr__(self):
+        return f"<TrialEmail {self.email}>"

@@ -58,45 +58,67 @@ def test_production_knowledge_model():
             ProductionKnowledgeModel, 
             ServiceNode, 
             DependencyEdge,
-            CriticalityTier
+            ServiceType,
+            HealthStatus
         )
         log_test("Import ProductionKnowledgeModel", True)
     except ImportError as e:
         log_test("Import ProductionKnowledgeModel", False, str(e))
         return
     
-    # Test ServiceNode dataclass
+    # Test ServiceNode dataclass (correct fields from source)
     try:
         node = ServiceNode(
             service_id="test-service",
             name="Test Service",
-            service_type="api",
+            service_type=ServiceType.MICROSERVICE.value,
+            team="platform",
+            owner="platform-team",
             criticality_tier=1,
-            owner_team="platform"
+            health_status=HealthStatus.HEALTHY.value,
+            replica_count=3,
+            current_version="v1.0.0",
+            avg_latency_ms=25.0,
+            avg_error_rate=0.1,
+            avg_requests_per_second=100.0,
+            avg_cpu_usage=45.0,
+            avg_memory_usage=60.0
         )
         log_test("Create ServiceNode", True, f"service_id={node.service_id}")
     except Exception as e:
         log_test("Create ServiceNode", False, str(e))
     
-    # Test DependencyEdge dataclass
+    # Test DependencyEdge dataclass (correct fields from source)
     try:
         edge = DependencyEdge(
-            source_id="svc-a",
-            target_id="svc-b",
-            dependency_type="http",
-            is_critical=True
+            edge_id="svc-a->svc-b",
+            source_service="svc-a",
+            target_service="svc-b",
+            dependency_type="sync_http",
+            is_critical=True,
+            is_async=False,
+            has_fallback=False,
+            avg_latency_ms=15.0,
+            avg_calls_per_second=50.0,
+            error_rate=0.01
         )
-        log_test("Create DependencyEdge", True, f"{edge.source_id} -> {edge.target_id}")
+        log_test("Create DependencyEdge", True, f"{edge.source_service} -> {edge.target_service}")
     except Exception as e:
         log_test("Create DependencyEdge", False, str(e))
     
-    # Test CriticalityTier enum
+    # Test ServiceType enum
     try:
-        tier1 = CriticalityTier.TIER_1
-        tier2 = CriticalityTier.TIER_2
-        log_test("CriticalityTier enum", True, f"TIER_1={tier1.value}, TIER_2={tier2.value}")
+        types = [t.value for t in ServiceType]
+        log_test("ServiceType enum", True, f"{len(types)} types: {types[:4]}...")
     except Exception as e:
-        log_test("CriticalityTier enum", False, str(e))
+        log_test("ServiceType enum", False, str(e))
+    
+    # Test HealthStatus enum
+    try:
+        statuses = [s.value for s in HealthStatus]
+        log_test("HealthStatus enum", True, f"{len(statuses)} statuses: {statuses}")
+    except Exception as e:
+        log_test("HealthStatus enum", False, str(e))
     
     print("  → Production Knowledge Model: Structure verified")
 
@@ -169,8 +191,7 @@ def test_mttr_acceleration():
             MTTRAccelerator,
             AnalysisResult,
             RemediationPlan,
-            AnalysisStrategy,
-            RemediationType
+            AnalysisStrategy
         )
         log_test("Import MTTRAccelerator", True)
     except ImportError as e:
@@ -184,39 +205,36 @@ def test_mttr_acceleration():
     except Exception as e:
         log_test("AnalysisStrategy enum", False, str(e))
     
-    # Test RemediationType enum
-    try:
-        types = [t.value for t in RemediationType]
-        log_test("RemediationType enum", True, f"{len(types)} types: {types}")
-    except Exception as e:
-        log_test("RemediationType enum", False, str(e))
-    
-    # Test AnalysisResult dataclass
+    # Test AnalysisResult dataclass (correct fields from source)
     try:
         result = AnalysisResult(
-            strategy=AnalysisStrategy.LOG_ANALYSIS,
-            root_cause_hypothesis="Memory leak detected",
-            confidence=0.85,
-            evidence=["OOM errors in logs"],
-            suggested_action="restart",
-            execution_time_ms=45
+            strategy=AnalysisStrategy.LOG_ANALYSIS.value,  # string, not enum
+            success=True,
+            confidence=85.0,
+            root_cause="Memory leak detected",
+            contributing_factors=["High memory usage", "Possible memory leak"],
+            evidence=[{"type": "log", "pattern": "OOM"}],
+            execution_time_ms=45.0
         )
-        log_test("Create AnalysisResult", True, f"strategy={result.strategy.value}, confidence={result.confidence}")
+        log_test("Create AnalysisResult", True, f"strategy={result.strategy}, confidence={result.confidence}")
     except Exception as e:
         log_test("Create AnalysisResult", False, str(e))
     
-    # Test RemediationPlan dataclass
+    # Test RemediationPlan dataclass (correct fields from source)
     try:
         plan = RemediationPlan(
             plan_id="plan-123",
-            remediation_type=RemediationType.ROLLBACK,
-            target_service="payment-service",
-            description="Rollback to previous version",
-            estimated_time_seconds=60,
+            action_type="rollback",
+            priority=1,
+            prerequisites=["Previous version available"],
+            steps=[{"action": "rollback_deployment"}],
+            rollback_steps=[{"action": "redeploy"}],
+            estimated_impact="Brief interruption",
+            estimated_time_minutes=5.0,
             risk_level="low",
-            requires_approval=False
+            ready_to_execute=True
         )
-        log_test("Create RemediationPlan", True, f"type={plan.remediation_type.value}")
+        log_test("Create RemediationPlan", True, f"action_type={plan.action_type}")
     except Exception as e:
         log_test("Create RemediationPlan", False, str(e))
     
@@ -236,7 +254,7 @@ def test_incident_timeline():
             IncidentTimelineGenerator,
             TimelineEvent,
             IncidentTimeline,
-            EventType,
+            TimelineEventType,
             EventSource
         )
         log_test("Import IncidentTimelineGenerator", True)
@@ -244,12 +262,12 @@ def test_incident_timeline():
         log_test("Import IncidentTimelineGenerator", False, str(e))
         return
     
-    # Test EventType enum
+    # Test TimelineEventType enum
     try:
-        types = [t.value for t in EventType]
-        log_test("EventType enum", True, f"{len(types)} types: {types[:5]}...")
+        types = [t.value for t in TimelineEventType]
+        log_test("TimelineEventType enum", True, f"{len(types)} types: {types[:5]}...")
     except Exception as e:
-        log_test("EventType enum", False, str(e))
+        log_test("TimelineEventType enum", False, str(e))
     
     # Test EventSource enum
     try:
@@ -258,19 +276,19 @@ def test_incident_timeline():
     except Exception as e:
         log_test("EventSource enum", False, str(e))
     
-    # Test TimelineEvent dataclass
+    # Test TimelineEvent dataclass (event_type and source are strings, not enums)
     try:
         event = TimelineEvent(
             event_id="evt-123",
             timestamp=datetime.now(timezone.utc).isoformat(),
-            event_type=EventType.DEPLOYMENT,
-            source=EventSource.CICD,
+            event_type=TimelineEventType.DEPLOYMENT.value,  # string
+            source=EventSource.CI_CD.value,  # string
             title="Deployment Started",
             description="Deploying v2.3.1",
             severity="info",
             service="payment-service"
         )
-        log_test("Create TimelineEvent", True, f"type={event.event_type.value}")
+        log_test("Create TimelineEvent", True, f"type={event.event_type}")
     except Exception as e:
         log_test("Create TimelineEvent", False, str(e))
     
