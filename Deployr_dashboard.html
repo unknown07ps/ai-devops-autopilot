@@ -4,6 +4,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- ============================================
+         SECURITY META TAGS - Frontend Protection
+         ============================================ -->
+
+    <!-- Content Security Policy - Prevent XSS attacks -->
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net;
+        style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com;
+        font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com data:;
+        img-src 'self' data: https: blob:;
+        connect-src 'self' http://localhost:* https://api.deployr.com;
+        frame-ancestors 'none';
+    ">
+
+    <!-- Prevent clickjacking -->
+    <meta http-equiv="X-Frame-Options" content="DENY">
+
+    <!-- Prevent MIME type sniffing -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+
+    <!-- XSS Protection -->
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+
+    <!-- Referrer Policy -->
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
     <title>Deployr - “Fix the oops. Without Ops.”</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -888,6 +916,218 @@
         let refreshInterval = null;
         let subscription = null;
 
+        // ============================================
+        // AUTHENTICATION STATE
+        // ============================================
+        let authState = {
+            isLoggedIn: false,
+            user: null,
+            accessToken: localStorage.getItem('deployr_access_token') || null,
+            subscription: null,
+            showAuthModal: false,
+            authMode: 'login' // 'login' or 'signup'
+        };
+
+        // Check for existing token on load
+        if (authState.accessToken) {
+            authState.isLoggedIn = true;
+            // Fetch user profile
+            fetchUserProfile();
+        }
+
+        // Fetch user profile
+        async function fetchUserProfile() {
+            if (!authState.accessToken) return;
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${authState.accessToken}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    authState.user = data.user;
+                    authState.subscription = data.subscription;
+                    authState.isLoggedIn = true;
+                } else if (res.status === 401) {
+                    // Token expired, logout
+                    logout();
+                }
+            } catch (e) {
+                console.log('Profile fetch failed, continuing as guest');
+            }
+            renderAuthUI();
+        }
+
+        // Show auth modal
+        function showAuthModal(mode = 'login') {
+            authState.authMode = mode;
+            authState.showAuthModal = true;
+            renderAuthModal();
+        }
+
+        // Hide auth modal
+        function hideAuthModal() {
+            authState.showAuthModal = false;
+            document.getElementById('auth-modal')?.remove();
+        }
+
+        // Login function
+        async function login(email, password) {
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    authState.accessToken = data.access_token;
+                    authState.isLoggedIn = true;
+                    localStorage.setItem('deployr_access_token', data.access_token);
+                    localStorage.setItem('deployr_refresh_token', data.refresh_token);
+                    await fetchUserProfile();
+                    hideAuthModal();
+                    showNotification('Login successful! Welcome back.', 'success');
+                    render();
+                } else {
+                    showNotification(data.detail || 'Login failed', 'error');
+                }
+            } catch (e) {
+                showNotification('Login failed: ' + e.message, 'error');
+            }
+        }
+
+        // Signup function
+        async function signup(email, password, fullName) {
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, full_name: fullName })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showNotification('Account created! Please login.', 'success');
+                    authState.authMode = 'login';
+                    renderAuthModal();
+                } else {
+                    showNotification(data.detail || 'Signup failed', 'error');
+                }
+            } catch (e) {
+                showNotification('Signup failed: ' + e.message, 'error');
+            }
+        }
+
+        // Logout function
+        function logout() {
+            authState.accessToken = null;
+            authState.user = null;
+            authState.subscription = null;
+            authState.isLoggedIn = false;
+            localStorage.removeItem('deployr_access_token');
+            localStorage.removeItem('deployr_refresh_token');
+            renderAuthUI();
+            showNotification('Logged out successfully', 'success');
+        }
+
+        // Render auth modal
+        function renderAuthModal() {
+            if (!authState.showAuthModal) return;
+
+            // Remove existing modal
+            document.getElementById('auth-modal')?.remove();
+
+            const isLogin = authState.authMode === 'login';
+            const modal = document.createElement('div');
+            modal.id = 'auth-modal';
+            modal.innerHTML = `
+                <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 9999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
+                    <div style="background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-darker) 100%); border: 1px solid var(--border); border-radius: 16px; padding: 32px; width: 400px; max-width: 90vw; box-shadow: 0 0 60px rgba(0,188,212,0.2);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                            <h2 style="font-size: 1.5rem; font-weight: 700; color: white;">${isLogin ? 'Welcome Back' : 'Create Account'}</h2>
+                            <button onclick="hideAuthModal()" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.5rem;">&times;</button>
+                        </div>
+                        
+                        <form onsubmit="event.preventDefault(); handleAuthSubmit();" id="auth-form">
+                            ${!isLogin ? `
+                            <div style="margin-bottom: 16px;">
+                                <label style="display: block; color: var(--text-secondary); margin-bottom: 8px; font-size: 0.9rem;">Full Name</label>
+                                <input type="text" id="auth-name" required style="width: 100%; padding: 12px 16px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; color: white; font-size: 1rem; box-sizing: border-box;" placeholder="Your name">
+                            </div>
+                            ` : ''}
+                            
+                            <div style="margin-bottom: 16px;">
+                                <label style="display: block; color: var(--text-secondary); margin-bottom: 8px; font-size: 0.9rem;">Email</label>
+                                <input type="email" id="auth-email" required style="width: 100%; padding: 12px 16px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; color: white; font-size: 1rem; box-sizing: border-box;" placeholder="you@example.com">
+                            </div>
+                            
+                            <div style="margin-bottom: 24px;">
+                                <label style="display: block; color: var(--text-secondary); margin-bottom: 8px; font-size: 0.9rem;">Password</label>
+                                <input type="password" id="auth-password" required minlength="8" style="width: 100%; padding: 12px 16px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; color: white; font-size: 1rem; box-sizing: border-box;" placeholder="••••••••">
+                            </div>
+                            
+                            <button type="submit" style="width: 100%; padding: 14px; background: linear-gradient(135deg, var(--primary), var(--primary-light)); border: none; border-radius: 8px; color: white; font-weight: 600; font-size: 1rem; cursor: pointer; margin-bottom: 16px; box-shadow: 0 0 20px var(--primary-glow);">
+                                ${isLogin ? 'Sign In' : 'Create Account'}
+                            </button>
+                        </form>
+                        
+                        <p style="text-align: center; color: var(--text-muted);">
+                            ${isLogin ? "Don't have an account?" : "Already have an account?"}
+                            <button onclick="showAuthModal('${isLogin ? 'signup' : 'login'}')" style="background: none; border: none; color: var(--primary); cursor: pointer; font-weight: 600; margin-left: 4px;">
+                                ${isLogin ? 'Sign Up' : 'Sign In'}
+                            </button>
+                        </p>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        // Handle auth form submit
+        function handleAuthSubmit() {
+            const email = document.getElementById('auth-email').value;
+            const password = document.getElementById('auth-password').value;
+
+            if (authState.authMode === 'login') {
+                login(email, password);
+            } else {
+                const name = document.getElementById('auth-name').value;
+                signup(email, password, name);
+            }
+        }
+
+        // Render auth UI in header
+        function renderAuthUI() {
+            const container = document.getElementById('auth-ui-container');
+            if (!container) return;
+
+            if (authState.isLoggedIn && authState.user) {
+                const plan = authState.subscription?.plan || 'FREE';
+                const planBadge = plan === 'enterprise' ? '👑 Enterprise' : plan === 'pro' ? '⭐ Pro' : plan === 'trial' ? '🎁 Trial' : '🆓 Free';
+                container.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="text-align: right;">
+                            <div style="color: white; font-weight: 500; font-size: 0.9rem;">${authState.user.email}</div>
+                            <div style="color: var(--primary); font-size: 0.75rem;">${planBadge}</div>
+                        </div>
+                        <button onclick="logout()" style="padding: 8px 16px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; color: var(--text-secondary); cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">
+                            Logout
+                        </button>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="showAuthModal('login')" style="padding: 8px 20px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; color: white; cursor: pointer; font-weight: 500; transition: all 0.2s;">
+                            Login
+                        </button>
+                        <button onclick="showAuthModal('signup')" style="padding: 8px 20px; background: linear-gradient(135deg, var(--primary), var(--primary-light)); border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: 600; box-shadow: 0 0 15px var(--primary-glow); transition: all 0.2s;">
+                            Sign Up
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
         let state = {
             stats: null,
             incidents: [],
@@ -907,7 +1147,11 @@
             alertTriageStats: null,
             mttrStats: null,
             costStats: null,
-            productionModelStats: null
+            productionModelStats: null,
+            // Cloud cost integration
+            selectedCloudProvider: null,
+            cloudConnectionStatus: { connections: [], total_connected: 0 },
+            realCloudCosts: null
         };
 
         // Filter state for incidents view
@@ -1267,7 +1511,9 @@
                     // Intelligence APIs
                     alertTriageRes, mttrRes, costRes, prodModelRes,
                     // Resolved incidents
-                    resolvedRes
+                    resolvedRes,
+                    // Cloud cost integration
+                    cloudStatusRes
                 ] = await Promise.all([
                     fetch(`${API_BASE}/api/stats`).catch(() => null),
                     fetch(`${API_BASE}/api/incidents?limit=20`).catch(() => null),
@@ -1286,7 +1532,9 @@
                     fetch(`${API_BASE}/api/intelligence/cost`).catch(() => null),
                     fetch(`${API_BASE}/api/intelligence/production-model`).catch(() => null),
                     // Resolved incidents
-                    fetch(`${API_BASE}/api/incidents/resolved`).catch(() => null)
+                    fetch(`${API_BASE}/api/incidents/resolved`).catch(() => null),
+                    // Cloud cost integration
+                    fetch(`${API_BASE}/api/cloud/status`).catch(() => null)
                 ]);
 
                 if (statsRes?.ok) state.stats = await statsRes.json();
@@ -1330,6 +1578,11 @@
                 if (resolvedRes?.ok) {
                     const data = await resolvedRes.json();
                     state.resolvedIncidents = data.resolved_incidents || [];
+                }
+
+                // Cloud cost connection status
+                if (cloudStatusRes?.ok) {
+                    state.cloudConnectionStatus = await cloudStatusRes.json();
                 }
 
                 state.loading = false;
@@ -1488,6 +1741,9 @@
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
             }
+
+            // Render auth UI (login/signup buttons)
+            renderAuthUI();
         }
 
         function renderSidebar(isCollapsed = false) {
@@ -1568,13 +1824,17 @@
             return `
                 <div class="glass border-b" style="border-color: var(--border);">
                     <div class="px-6 py-4">
-                        <!-- Branding Row -->
-                        <div class="topbar-branding flex items-center gap-5 mb-5">
-                            <img src="img/deployr_logo.png" class="h-28 w-28 object-contain logo-glow" alt="Deployr Logo" />
-                            <div>
-                                <h1 class="text-4xl font-bold tracking-wide" style="color: var(--text-primary);">Deployr</h1>
-                                <p class="text-base" style="color: var(--text-secondary);">Fix the oops. Without Ops.</p>
+                        <!-- Branding Row with Auth -->
+                        <div class="topbar-branding flex items-center justify-between mb-5">
+                            <div class="flex items-center gap-5">
+                                <img src="img/deployr_logo.png" class="h-28 w-28 object-contain logo-glow" alt="Deployr Logo" />
+                                <div>
+                                    <h1 class="text-4xl font-bold tracking-wide" style="color: var(--text-primary);">Deployr</h1>
+                                    <p class="text-base" style="color: var(--text-secondary);">Fix the oops. Without Ops.</p>
+                                </div>
                             </div>
+                            <!-- Auth UI Container -->
+                            <div id="auth-ui-container"></div>
                         </div>
                         
                         <!-- Controls Row -->
@@ -3167,6 +3427,138 @@
                     </div>
                 </div>
             `;
+        }
+
+        // ============================================================================
+        // CLOUD COST INTEGRATION FUNCTIONS
+        // ============================================================================
+
+        function selectCloudProvider(provider) {
+            state.selectedCloudProvider = provider;
+            render();
+            // Re-initialize Lucide icons after render
+            if (window.lucide) lucide.createIcons();
+        }
+
+        async function connectCloudProvider() {
+            const provider = state.selectedCloudProvider;
+            if (!provider) {
+                showNotification('Please select a cloud provider first', 'error');
+                return;
+            }
+
+            let credentials = {};
+
+            if (provider === 'aws') {
+                const accessKey = document.getElementById('aws-access-key')?.value;
+                const secretKey = document.getElementById('aws-secret-key')?.value;
+                if (!accessKey || !secretKey) {
+                    showNotification('Please enter both Access Key ID and Secret Access Key', 'error');
+                    return;
+                }
+                credentials = { access_key_id: accessKey, secret_access_key: secretKey };
+            } else if (provider === 'azure') {
+                const subscription = document.getElementById('azure-subscription')?.value;
+                const tenant = document.getElementById('azure-tenant')?.value;
+                const clientId = document.getElementById('azure-client-id')?.value;
+                const clientSecret = document.getElementById('azure-client-secret')?.value;
+                if (!subscription || !tenant || !clientId || !clientSecret) {
+                    showNotification('Please fill in all Azure credentials', 'error');
+                    return;
+                }
+                credentials = {
+                    subscription_id: subscription,
+                    tenant_id: tenant,
+                    client_id: clientId,
+                    client_secret: clientSecret
+                };
+            } else if (provider === 'gcp') {
+                const serviceAccount = document.getElementById('gcp-service-account')?.value;
+                if (!serviceAccount) {
+                    showNotification('Please paste the Service Account JSON', 'error');
+                    return;
+                }
+                credentials = { service_account_json: serviceAccount };
+            }
+
+            try {
+                showNotification(`Connecting to ${provider.toUpperCase()}...`, 'info');
+
+                const response = await fetch(`${API_BASE}/api/cloud/connect`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider, credentials })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification(result.message, 'success');
+                    // Refresh connection status
+                    await fetchCloudStatus();
+                    // Fetch real costs
+                    await fetchCloudCosts();
+                    render();
+                } else {
+                    showNotification(result.message || 'Connection failed', 'error');
+                }
+            } catch (error) {
+                showNotification('Error connecting: ' + error.message, 'error');
+            }
+        }
+
+        async function disconnectCloudProvider(provider) {
+            if (!confirm(`Are you sure you want to disconnect from ${provider.toUpperCase()}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/cloud/disconnect/${provider}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification(result.message, 'success');
+                    await fetchCloudStatus();
+                    render();
+                } else {
+                    showNotification(result.message || 'Disconnect failed', 'error');
+                }
+            } catch (error) {
+                showNotification('Error disconnecting: ' + error.message, 'error');
+            }
+        }
+
+        async function fetchCloudStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/api/cloud/status`);
+                const data = await response.json();
+                state.cloudConnectionStatus = data;
+            } catch (error) {
+                console.error('Failed to fetch cloud status:', error);
+                state.cloudConnectionStatus = { connections: [], total_connected: 0 };
+            }
+        }
+
+        async function fetchCloudCosts() {
+            try {
+                const response = await fetch(`${API_BASE}/api/cloud/costs?days=30`);
+                const data = await response.json();
+                state.realCloudCosts = data;
+
+                // Update cost stats if we have real data
+                if (data.connected && data.total_month_spend > 0) {
+                    state.costStats = {
+                        ...state.costStats,
+                        todays_spend: Math.round(data.total_month_spend / 30),
+                        real_data: true
+                    };
+                }
+            } catch (error) {
+                console.error('Failed to fetch cloud costs:', error);
+            }
         }
 
         // ============================================================================
@@ -5171,6 +5563,11 @@ Correlated Event Sources
                 { type: 'Unused Resources', service: 'ml-training', amount: '$120/day', severity: 'medium', action: 'Terminate Idle Instances' },
                 { type: 'Over-provisioned', service: 'api-gateway', amount: '$85/day', severity: 'low', action: 'Rightsize Suggested' }
             ];
+            // Cloud connection state
+            const cloudStatus = state.cloudConnectionStatus || { connections: [], total_connected: 0 };
+            const connectedProviders = cloudStatus.connections?.map(c => c.provider) || [];
+            const hasCloudConnection = cloudStatus.total_connected > 0;
+            const realCosts = state.realCloudCosts || {};
 
             return `
                 <div class="space-y-6">
@@ -5181,11 +5578,172 @@ Correlated Event Sources
                                 <i data-lucide="dollar-sign" class="inline-block mr-2" style="width: 28px; height: 28px; color: var(--primary); vertical-align: middle;"></i>
                                 Cloud Cost Intelligence
                             </h1>
-                            <p class="text-sm" style="color: var(--text-muted);">Cost anomaly detection and budget monitoring</p>
+                            <p class="text-sm" style="color: var(--text-muted);">Connect your cloud account to fetch real-time costs</p>
                         </div>
-                        <div class="text-xs px-3 py-1 bg-green-600/20 text-green-400 rounded-full">
-                            <i data-lucide="activity" class="inline-block mr-1" style="width: 12px; height: 12px;"></i> LIVE
+                        <div class="flex items-center gap-2">
+                            ${hasCloudConnection ? `
+                                <div class="text-xs px-3 py-1 bg-green-600/20 text-green-400 rounded-full">
+                                    <i data-lucide="check-circle" class="inline-block mr-1" style="width: 12px; height: 12px;"></i>
+                                    Connected: ${connectedProviders.map(p => p.toUpperCase()).join(', ')}
+                                </div>
+                            ` : `
+                                <div class="text-xs px-3 py-1 bg-yellow-600/20 text-yellow-400 rounded-full">
+                                    <i data-lucide="alert-circle" class="inline-block mr-1" style="width: 12px; height: 12px;"></i>
+                                    Not Connected
+                                </div>
+                            `}
                         </div>
+                    </div>
+
+                    <!-- Cloud Provider Connection Card -->
+                    <div class="card-glow rounded-xl p-6" style="background: linear-gradient(135deg, rgba(20,20,30,0.9) 0%, rgba(30,30,45,0.9) 100%); border: 1px solid rgba(255,255,255,0.1);">
+                        <h3 class="text-lg font-bold mb-2" style="color: var(--text-primary);">
+                            <i data-lucide="cloud" class="inline-block mr-2" style="width: 20px; height: 20px; color: var(--primary); vertical-align: middle;"></i>
+                            Connect Cloud Provider
+                        </h3>
+                        <p class="text-sm text-gray-400 mb-5">Link your cloud account to monitor real-time costs and get cost protection alerts</p>
+                        
+                        <!-- Provider Selector - Professional Cards -->
+                        <div class="grid grid-cols-3 gap-4 mb-6">
+                            <!-- AWS Button -->
+                            <button onclick="selectCloudProvider('aws')" 
+                                class="group relative overflow-hidden rounded-xl p-5 transition-all duration-300 ${state.selectedCloudProvider === 'aws' ? 'ring-2 ring-orange-500 scale-105 shadow-lg shadow-orange-500/30' : 'hover:scale-102 hover:shadow-lg hover:shadow-orange-500/20'}"
+                                style="${state.selectedCloudProvider === 'aws' ?
+                    'background: linear-gradient(135deg, #FF9900 0%, #EC7211 100%);' :
+                    'background: linear-gradient(145deg, rgba(35,35,45,1) 0%, rgba(25,25,35,1) 100%); border: 1px solid rgba(255,153,0,0.4);'}">
+                                <div class="flex flex-col items-center gap-3">
+                                    <div class="w-14 h-14 flex items-center justify-center rounded-xl ${state.selectedCloudProvider === 'aws' ? 'bg-white/20' : 'bg-orange-500/10'}">
+                                        <svg viewBox="0 0 40 40" style="width: 36px; height: 36px;">
+                                            <!-- AWS Cloud/Cube Icon -->
+                                            <path d="M20 6L34 14V26L20 34L6 26V14L20 6Z" fill="${state.selectedCloudProvider === 'aws' ? 'rgba(255,255,255,0.2)' : 'rgba(255,153,0,0.2)'}" stroke="${state.selectedCloudProvider === 'aws' ? '#fff' : '#FF9900'}" stroke-width="1.5"/>
+                                            <path d="M20 6L34 14L20 22L6 14L20 6Z" fill="${state.selectedCloudProvider === 'aws' ? 'rgba(255,255,255,0.3)' : 'rgba(255,153,0,0.3)'}"/>
+                                            <path d="M20 22V34M6 14L20 22M34 14L20 22" stroke="${state.selectedCloudProvider === 'aws' ? '#fff' : '#FF9900'}" stroke-width="1.5" fill="none"/>
+                                            <circle cx="20" cy="14" r="3" fill="${state.selectedCloudProvider === 'aws' ? '#fff' : '#FF9900'}"/>
+                                        </svg>
+                                    </div>
+                                    <div class="text-center">
+                                        <div class="font-bold text-lg ${state.selectedCloudProvider === 'aws' ? 'text-white' : 'text-orange-400'}">AWS</div>
+                                        <div class="text-xs ${state.selectedCloudProvider === 'aws' ? 'text-orange-100' : 'text-gray-500'}">Cost Explorer</div>
+                                    </div>
+                                </div>
+                                ${connectedProviders.includes('aws') ? '<div class="absolute top-2 right-2 w-4 h-4 bg-green-500 rounded-full border-2 border-white flex items-center justify-center"><svg viewBox="0 0 16 16" class="w-2 h-2 text-white"><path d="M13.5 4.5L6 12L2.5 8.5" stroke="currentColor" stroke-width="2" fill="none"/></svg></div>' : ''}
+                            </button>
+                            
+                            <!-- Azure Button -->
+                            <button onclick="selectCloudProvider('azure')" 
+                                class="group relative overflow-hidden rounded-xl p-5 transition-all duration-300 ${state.selectedCloudProvider === 'azure' ? 'ring-2 ring-blue-500 scale-105 shadow-lg shadow-blue-500/30' : 'hover:scale-102 hover:shadow-lg hover:shadow-blue-500/20'}"
+                                style="${state.selectedCloudProvider === 'azure' ?
+                    'background: linear-gradient(135deg, #0078D4 0%, #005A9E 100%);' :
+                    'background: linear-gradient(145deg, rgba(35,35,45,1) 0%, rgba(25,25,35,1) 100%); border: 1px solid rgba(0,120,212,0.4);'}">
+                                <div class="flex flex-col items-center gap-3">
+                                    <div class="w-14 h-14 flex items-center justify-center rounded-xl ${state.selectedCloudProvider === 'azure' ? 'bg-white/20' : 'bg-blue-500/10'}">
+                                        <svg viewBox="0 0 40 40" style="width: 36px; height: 36px;">
+                                            <!-- Azure Diamond Icon -->
+                                            <path d="M20 4L36 20L20 36L4 20L20 4Z" fill="${state.selectedCloudProvider === 'azure' ? 'rgba(255,255,255,0.2)' : 'rgba(0,120,212,0.2)'}" stroke="${state.selectedCloudProvider === 'azure' ? '#fff' : '#0078D4'}" stroke-width="1.5"/>
+                                            <path d="M20 4L36 20L20 20L4 20L20 4Z" fill="${state.selectedCloudProvider === 'azure' ? 'rgba(255,255,255,0.3)' : 'rgba(0,120,212,0.3)'}"/>
+                                            <path d="M12 20L20 12L28 20L20 28L12 20Z" fill="${state.selectedCloudProvider === 'azure' ? '#fff' : '#0078D4'}"/>
+                                        </svg>
+                                    </div>
+                                    <div class="text-center">
+                                        <div class="font-bold text-lg ${state.selectedCloudProvider === 'azure' ? 'text-white' : 'text-blue-400'}">Azure</div>
+                                        <div class="text-xs ${state.selectedCloudProvider === 'azure' ? 'text-blue-100' : 'text-gray-500'}">Cost Management</div>
+                                    </div>
+                                </div>
+                                ${connectedProviders.includes('azure') ? '<div class="absolute top-2 right-2 w-4 h-4 bg-green-500 rounded-full border-2 border-white flex items-center justify-center"><svg viewBox="0 0 16 16" class="w-2 h-2 text-white"><path d="M13.5 4.5L6 12L2.5 8.5" stroke="currentColor" stroke-width="2" fill="none"/></svg></div>' : ''}
+                            </button>
+                            
+                            <!-- GCP Button -->
+                            <button onclick="selectCloudProvider('gcp')" 
+                                class="group relative overflow-hidden rounded-xl p-5 transition-all duration-300 ${state.selectedCloudProvider === 'gcp' ? 'ring-2 ring-emerald-500 scale-105 shadow-lg shadow-emerald-500/30' : 'hover:scale-102 hover:shadow-lg hover:shadow-emerald-500/20'}"
+                                style="${state.selectedCloudProvider === 'gcp' ?
+                    'background: linear-gradient(135deg, #4285F4 0%, #34A853 100%);' :
+                    'background: linear-gradient(145deg, rgba(35,35,45,1) 0%, rgba(25,25,35,1) 100%); border: 1px solid rgba(66,133,244,0.4);'}">
+                                <div class="flex flex-col items-center gap-3">
+                                    <div class="w-14 h-14 flex items-center justify-center rounded-xl ${state.selectedCloudProvider === 'gcp' ? 'bg-white/20' : 'bg-emerald-500/10'}">
+                                        <svg viewBox="0 0 40 40" style="width: 36px; height: 36px;">
+                                            <!-- GCP Hexagon Cloud Icon -->
+                                            <path d="M20 4L35 12V28L20 36L5 28V12L20 4Z" fill="${state.selectedCloudProvider === 'gcp' ? 'rgba(255,255,255,0.2)' : 'rgba(52,168,83,0.2)'}" stroke="${state.selectedCloudProvider === 'gcp' ? '#fff' : '#34A853'}" stroke-width="1.5"/>
+                                            <path d="M20 4L35 12L20 20L5 12L20 4Z" fill="${state.selectedCloudProvider === 'gcp' ? 'rgba(255,255,255,0.3)' : 'rgba(66,133,244,0.3)'}"/>
+                                            <circle cx="20" cy="20" r="6" fill="${state.selectedCloudProvider === 'gcp' ? '#fff' : '#34A853'}" opacity="0.9"/>
+                                            <circle cx="20" cy="20" r="3" fill="${state.selectedCloudProvider === 'gcp' ? 'rgba(52,168,83,0.8)' : 'rgba(35,35,45,1)'}"/>
+                                        </svg>
+                                    </div>
+                                    <div class="text-center">
+                                        <div class="font-bold text-lg ${state.selectedCloudProvider === 'gcp' ? 'text-white' : 'text-emerald-400'}">GCP</div>
+                                        <div class="text-xs ${state.selectedCloudProvider === 'gcp' ? 'text-emerald-100' : 'text-gray-500'}">Cloud Billing</div>
+                                    </div>
+                                </div>
+                                ${connectedProviders.includes('gcp') ? '<div class="absolute top-2 right-2 w-4 h-4 bg-green-500 rounded-full border-2 border-white flex items-center justify-center"><svg viewBox="0 0 16 16" class="w-2 h-2 text-white"><path d="M13.5 4.5L6 12L2.5 8.5" stroke="currentColor" stroke-width="2" fill="none"/></svg></div>' : ''}
+                            </button>
+                        </div>
+
+                        <!-- AWS Credentials Form -->
+                        <div id="aws-form" class="${state.selectedCloudProvider === 'aws' ? '' : 'hidden'} space-y-3">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm mb-1" style="color: var(--text-muted);">Access Key ID</label>
+                                    <input type="text" id="aws-access-key" placeholder="AKIAIOSFODNN7EXAMPLE" 
+                                        class="w-full bg-black/40 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:border-primary focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm mb-1" style="color: var(--text-muted);">Secret Access Key</label>
+                                    <input type="password" id="aws-secret-key" placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" 
+                                        class="w-full bg-black/40 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:border-primary focus:outline-none">
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-500">Requires ce:GetCostAndUsage IAM permission</p>
+                        </div>
+
+                        <!-- Azure Credentials Form -->
+                        <div id="azure-form" class="${state.selectedCloudProvider === 'azure' ? '' : 'hidden'} space-y-3">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm mb-1" style="color: var(--text-muted);">Subscription ID</label>
+                                    <input type="text" id="azure-subscription" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" 
+                                        class="w-full bg-black/40 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:border-primary focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm mb-1" style="color: var(--text-muted);">Tenant ID</label>
+                                    <input type="text" id="azure-tenant" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" 
+                                        class="w-full bg-black/40 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:border-primary focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm mb-1" style="color: var(--text-muted);">Client ID</label>
+                                    <input type="text" id="azure-client-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" 
+                                        class="w-full bg-black/40 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:border-primary focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm mb-1" style="color: var(--text-muted);">Client Secret</label>
+                                    <input type="password" id="azure-client-secret" placeholder="Enter client secret" 
+                                        class="w-full bg-black/40 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:border-primary focus:outline-none">
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-500">Requires Cost Management Reader role on subscription</p>
+                        </div>
+
+                        <!-- GCP Credentials Form -->
+                        <div id="gcp-form" class="${state.selectedCloudProvider === 'gcp' ? '' : 'hidden'} space-y-3">
+                            <div>
+                                <label class="block text-sm mb-1" style="color: var(--text-muted);">Service Account JSON</label>
+                                <textarea id="gcp-service-account" rows="4" placeholder='{"type": "service_account", "project_id": "...", ...}' 
+                                    class="w-full bg-black/40 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:border-primary focus:outline-none font-mono text-sm"></textarea>
+                            </div>
+                            <p class="text-xs text-gray-500">Paste your service account JSON key. Requires BigQuery billing export.</p>
+                        </div>
+
+                        <!-- Connect Button -->
+                        ${state.selectedCloudProvider ? `
+                            <div class="flex gap-3 mt-4">
+                                <button onclick="connectCloudProvider()" class="bg-primary hover:bg-primary/80 px-6 py-2 rounded-lg font-bold text-black transition">
+                                    Connect ${state.selectedCloudProvider.toUpperCase()}
+                                </button>
+                                ${connectedProviders.includes(state.selectedCloudProvider) ? `
+                                    <button onclick="disconnectCloudProvider('${state.selectedCloudProvider}')" class="bg-red-600 hover:bg-red-700 px-6 py-2 rounded-lg font-bold text-white transition">
+                                        Disconnect
+                                    </button>
+                                ` : ''}
+                            </div>
+                        ` : ''}
                     </div>
 
                     <!-- Cost Stats -->

@@ -522,3 +522,40 @@ class TrialEmail(Base):
     
     def __repr__(self):
         return f"<TrialEmail {self.email}>"
+
+
+class CloudCredential(Base):
+    """Stores encrypted cloud provider credentials for cost integration"""
+    __tablename__ = "cloud_credentials"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(255), ForeignKey("users.user_id"), nullable=False)
+    
+    # Provider: aws, azure, gcp
+    provider = Column(String(50), nullable=False)
+    
+    # AES-256 encrypted credentials JSON
+    encrypted_credentials = Column(Text, nullable=False)
+    
+    # Connection status
+    is_active = Column(Boolean, default=True)
+    last_tested = Column(DateTime(timezone=True))
+    last_test_success = Column(Boolean)
+    last_error = Column(String(500))
+    
+    # Usage tracking
+    last_cost_fetch = Column(DateTime(timezone=True))
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    __table_args__ = (
+        Index('idx_cloud_cred_user', 'user_id'),
+        Index('idx_cloud_cred_provider', 'provider'),
+        # Ensure one credential per provider per user
+        Index('idx_cloud_cred_unique', 'user_id', 'provider', unique=True),
+    )
+    
+    def __repr__(self):
+        return f"<CloudCredential {self.provider} for {self.user_id}>"

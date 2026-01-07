@@ -25,7 +25,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 1 hour
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 
-# Password hashing
+# Password hashing - use bcrypt with manual truncation to avoid passlib version issues
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Bearer token authentication
@@ -36,12 +36,23 @@ security = HTTPBearer()
 # ============================================================================
 
 def hash_password(password: str) -> str:
-    """Hash a password for storage"""
-    return pwd_context.hash(password)
+    """Hash a password for storage - manually handles bcrypt 72-byte limit"""
+    import bcrypt
+    # Truncate password to 72 bytes before hashing (bcrypt limit)
+    password_bytes = password.encode('utf-8')[:72]
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    return hashed.decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against a hash"""
-    return pwd_context.verify(plain_password, hashed_password)
+    import bcrypt
+    password_bytes = plain_password.encode('utf-8')[:72]
+    hashed_bytes = hashed_password.encode('utf-8')
+    try:
+        return bcrypt.checkpw(password_bytes, hashed_bytes)
+    except Exception:
+        return False
 
 # ============================================================================
 # JWT Token Management

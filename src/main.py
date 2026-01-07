@@ -273,6 +273,14 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Setup API rate limiting
+try:
+    from src.rate_limiting import setup_rate_limiting
+    setup_rate_limiting(app)
+except ImportError as e:
+    print(f"[SECURITY] ⚠ Rate limiting not available: {e}")
+    print("[SECURITY]   Install slowapi: pip install slowapi")
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler for unexpected errors"""
@@ -301,11 +309,65 @@ async def global_exception_handler(request: Request, exc: Exception):
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=os.getenv("ALLOWED_ORIGINS", "*").split(","),  # Configure in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ============================================================================
+# TRANSPORT SECURITY - HTTPS enforcement and security headers
+# ============================================================================
+
+# HTTPS Redirect in production
+if os.getenv("ENVIRONMENT") == "production":
+    from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
+    app.add_middleware(HTTPSRedirectMiddleware)
+    print("[SECURITY] ✓ HTTPS redirect enabled for production")
+
+# Trusted Host middleware to prevent host header attacks
+if os.getenv("ALLOWED_HOSTS"):
+    from starlette.middleware.trustedhost import TrustedHostMiddleware
+    allowed_hosts = os.getenv("ALLOWED_HOSTS").split(",")
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+    print(f"[SECURITY] ✓ Trusted hosts: {allowed_hosts}")
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Add security headers to all responses"""
+    response = await call_next(request)
+    
+    # Security headers for production
+    if os.getenv("ENVIRONMENT") == "production":
+        # Prevent clickjacking
+        response.headers["X-Frame-Options"] = "DENY"
+        
+        # Prevent MIME type sniffing
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        
+        # Enable XSS filter
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        
+        # Referrer policy
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        
+        # Content Security Policy (adjust as needed)
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https:; "
+            "font-src 'self' data:; "
+            "connect-src 'self' https:;"
+        )
+        
+        # Strict Transport Security (HSTS) - only serve over HTTPS for 1 year
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains; preload"
+        )
+    
+    return response
 
 # Include routers
 app.include_router(auth_router)
@@ -784,6 +846,300 @@ async def register_trial_email(data: TrialRegisterRequest):
     except Exception as e:
         print(f"[TRIAL] Error registering email: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# CLOUD COST INTEGRATION - AWS, Azure, GCP
+# ============================================================================
+
+class CloudConnectRequest(BaseModel):
+    provider: str  # aws, azure, gcp
+    credentials: dict  # Provider-specific credentials
+
+class CloudCostRequest(BaseModel):
+    days: Optional[int] = 30
+
+
+@app.post("/api/cloud/connect")
+async def connect_cloud_provider(data: CloudConnectRequest):
+    """Connect to a cloud provider and save encrypted credentials"""
+    try:
+        from src.cloud_costs.encryption import encrypt_credentials, validate_credentials_format
+        from src.models import CloudCredential
+        
+        provider = data.provider.lower()
+        
+        # Validate provider
+        if provider not in ['aws', 'azure', 'gcp']:
+            raise HTTPException(status_code=400, detail=f"Invalid provider: {provider}. Use aws, azure, or gcp")
+        
+        # Validate credentials format
+        is_valid, error_msg = validate_credentials_format(provider, data.credentials)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+        
+        # Test connection before saving
+        test_success = False
+        test_message = ""
+        
+        try:
+            if provider == 'aws':
+                from src.cloud_costs.aws_costs import AWSCostClient
+                client = AWSCostClient(
+                    data.credentials['access_key_id'],
+                    data.credentials['secret_access_key']
+                )
+                test_success, test_message = client.test_connection()
+                
+            elif provider == 'azure':
+                from src.cloud_costs.azure_costs import AzureCostClient
+                client = AzureCostClient(
+                    data.credentials['subscription_id'],
+                    data.credentials['client_id'],
+                    data.credentials['client_secret'],
+                    data.credentials['tenant_id']
+                )
+                test_success, test_message = client.test_connection()
+                
+            elif provider == 'gcp':
+                from src.cloud_costs.gcp_costs import GCPCostClient
+                client = GCPCostClient(data.credentials['service_account_json'])
+                test_success, test_message = client.test_connection()
+        except ImportError as ie:
+            # SDK not installed - save anyway and note the issue
+            test_message = f"SDK not installed: {ie}. Credentials saved but cannot verify."
+            test_success = True  # Allow saving anyway
+        
+        if not test_success:
+            return {
+                "success": False,
+                "message": test_message,
+                "connected": False
+            }
+        
+        # Encrypt and save credentials
+        encrypted = encrypt_credentials(data.credentials)
+        
+        # Use a default user ID for now
+        user_id = "dashboard_user"
+        
+        with get_db_context() as db:
+            existing = db.query(CloudCredential).filter(
+                CloudCredential.user_id == user_id,
+                CloudCredential.provider == provider
+            ).first()
+            
+            if existing:
+                existing.encrypted_credentials = encrypted
+                existing.last_tested = datetime.now(timezone.utc)
+                existing.last_test_success = test_success
+                existing.last_error = None if test_success else test_message
+                existing.is_active = True
+            else:
+                new_cred = CloudCredential(
+                    user_id=user_id,
+                    provider=provider,
+                    encrypted_credentials=encrypted,
+                    last_tested=datetime.now(timezone.utc),
+                    last_test_success=test_success,
+                    is_active=True
+                )
+                db.add(new_cred)
+            
+            db.commit()
+        
+        print(f"[CLOUD] ✓ Connected to {provider.upper()}")
+        
+        return {
+            "success": True,
+            "message": test_message or f"Successfully connected to {provider.upper()}",
+            "connected": True,
+            "provider": provider
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[CLOUD] Error connecting: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/cloud/status")
+async def get_cloud_connection_status():
+    """Get status of all cloud provider connections"""
+    try:
+        from src.models import CloudCredential
+        
+        user_id = "dashboard_user"
+        
+        with get_db_context() as db:
+            credentials = db.query(CloudCredential).filter(
+                CloudCredential.user_id == user_id,
+                CloudCredential.is_active == True
+            ).all()
+            
+            connections = []
+            for cred in credentials:
+                connections.append({
+                    "provider": cred.provider,
+                    "connected": True,
+                    "last_tested": cred.last_tested.isoformat() if cred.last_tested else None,
+                    "last_test_success": cred.last_test_success,
+                    "last_error": cred.last_error
+                })
+            
+            return {"connections": connections, "total_connected": len(connections)}
+            
+    except Exception as e:
+        return {"connections": [], "total_connected": 0, "error": str(e)}
+
+
+@app.get("/api/cloud/costs")
+async def get_cloud_costs(days: int = 30):
+    """Fetch real cloud costs from connected providers"""
+    try:
+        from src.models import CloudCredential
+        from src.cloud_costs.encryption import decrypt_credentials
+        
+        user_id = "dashboard_user"
+        
+        with get_db_context() as db:
+            credentials = db.query(CloudCredential).filter(
+                CloudCredential.user_id == user_id,
+                CloudCredential.is_active == True
+            ).all()
+            
+            if not credentials:
+                return {"connected": False, "message": "No cloud providers connected", "costs": {}}
+            
+            all_costs = {}
+            total_spend = 0.0
+            
+            for cred in credentials:
+                try:
+                    decrypted = decrypt_credentials(cred.encrypted_credentials)
+                    
+                    if cred.provider == 'aws':
+                        from src.cloud_costs.aws_costs import AWSCostClient
+                        client = AWSCostClient(decrypted['access_key_id'], decrypted['secret_access_key'])
+                        summary = client.get_current_month_summary()
+                        services = client.get_service_breakdown(days)
+                        
+                    elif cred.provider == 'azure':
+                        from src.cloud_costs.azure_costs import AzureCostClient
+                        client = AzureCostClient(decrypted['subscription_id'], decrypted['client_id'], 
+                                                  decrypted['client_secret'], decrypted['tenant_id'])
+                        summary = client.get_current_month_summary()
+                        services = client.get_service_breakdown(days)
+                        
+                    elif cred.provider == 'gcp':
+                        from src.cloud_costs.gcp_costs import GCPCostClient
+                        client = GCPCostClient(decrypted['service_account_json'])
+                        summary = client.get_current_month_summary()
+                        services = client.get_service_breakdown(days)
+                    
+                    all_costs[cred.provider] = {"summary": summary, "services": services}
+                    total_spend += summary.get('current_month_spend', 0)
+                    cred.last_cost_fetch = datetime.now(timezone.utc)
+                    
+                except Exception as e:
+                    all_costs[cred.provider] = {"error": str(e)}
+            
+            db.commit()
+            
+            return {
+                "connected": True,
+                "providers": list(all_costs.keys()),
+                "costs": all_costs,
+                "total_month_spend": round(total_spend, 2)
+            }
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/cloud/disconnect/{provider}")
+async def disconnect_cloud_provider(provider: str):
+    """Disconnect from a cloud provider"""
+    try:
+        from src.models import CloudCredential
+        
+        user_id = "dashboard_user"
+        provider = provider.lower()
+        
+        with get_db_context() as db:
+            cred = db.query(CloudCredential).filter(
+                CloudCredential.user_id == user_id,
+                CloudCredential.provider == provider
+            ).first()
+            
+            if not cred:
+                raise HTTPException(status_code=404, detail=f"No {provider} connection found")
+            
+            db.delete(cred)
+            db.commit()
+            
+            return {"success": True, "message": f"Disconnected from {provider.upper()}"}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# COST GUARD - Action Cost Impact Assessment
+# ============================================================================
+
+class CostImpactRequest(BaseModel):
+    action_type: str
+    service: Optional[str] = None
+    params: Optional[dict] = None
+
+
+@app.post("/api/cloud/cost-impact")
+async def assess_cost_impact(data: CostImpactRequest):
+    """Assess the cost impact of a proposed action before execution"""
+    try:
+        from src.cloud_costs.cost_guard import assess_action
+        
+        assessment = assess_action(data.action_type, data.service, data.params)
+        
+        print(f"[COST GUARD] Action '{data.action_type}' assessed: {assessment['cost_impact']} impact")
+        
+        return assessment
+        
+    except Exception as e:
+        print(f"[COST GUARD] Error assessing action: {e}")
+        # Default to medium risk if assessment fails
+        return {
+            "action": data.action_type,
+            "cost_impact": "unknown",
+            "impact_level": "medium",
+            "requires_approval": True,
+            "blocked": False,
+            "message": "Unable to assess cost impact",
+            "badge_color": "gray"
+        }
+
+
+@app.get("/api/cloud/cost-guard/config")
+async def get_cost_guard_config():
+    """Get cost guard configuration and thresholds"""
+    try:
+        from src.cloud_costs.cost_guard import get_cost_guard
+        
+        guard = get_cost_guard()
+        
+        return {
+            "enabled": True,
+            "warning_threshold_per_hour": guard.cost_threshold_warning,
+            "block_threshold_per_hour": guard.cost_threshold_block,
+            "monthly_budget": guard.monthly_budget,
+            "high_cost_actions": list(HIGH_COST_ACTIONS.keys()) if 'HIGH_COST_ACTIONS' in dir() else []
+        }
+    except Exception as e:
+        return {"enabled": False, "error": str(e)}
 
 
 @app.post("/api/v2/actions/approve")
@@ -1522,6 +1878,122 @@ async def get_safety_status_public():
     except Exception as e:
         print(f"[API ERROR] get_safety_status_public: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# EMERGENCY KILL SWITCH - Immediately disable all autonomous operations
+# ============================================================================
+
+@app.post("/api/v3/autonomous/emergency-stop")
+async def emergency_stop_autonomous(current_user: User = Depends(get_current_user)):
+    """
+    EMERGENCY KILL SWITCH - Immediately stops all autonomous operations
+    - Switches to MANUAL mode
+    - Cancels all active autonomous actions
+    - Clears pending autonomous queue
+    Use in emergencies when autonomous actions are causing harm
+    """
+    from datetime import datetime, timezone
+    
+    try:
+        stopped_actions = []
+        
+        if AUTONOMOUS_ENABLED and autonomous_executor:
+            # 1. Switch to MANUAL mode immediately
+            from src.autonomous_executor import ExecutionMode
+            previous_mode = autonomous_executor.execution_mode.value
+            autonomous_executor.set_execution_mode(ExecutionMode.MANUAL)
+            
+            # 2. Cancel all active actions
+            for action_id, action_info in list(autonomous_executor.active_actions.items()):
+                action = action_info.get('action', {})
+                action['status'] = 'cancelled_emergency'
+                action['cancelled_at'] = datetime.now(timezone.utc).isoformat()
+                action['cancelled_by'] = current_user.user_id
+                action['cancel_reason'] = 'Emergency kill switch activated'
+                
+                # Update in Redis
+                redis_client.setex(f"action:{action_id}", 86400, json.dumps(action))
+                stopped_actions.append(action_id)
+            
+            # 3. Clear active actions
+            autonomous_executor.active_actions.clear()
+            
+            # 4. Record emergency stop event
+            emergency_record = {
+                "event": "emergency_stop",
+                "activated_by": current_user.user_id,
+                "activated_at": datetime.now(timezone.utc).isoformat(),
+                "previous_mode": previous_mode,
+                "actions_cancelled": stopped_actions
+            }
+            redis_client.lpush("autonomous_emergency_stops", json.dumps(emergency_record))
+            
+            print(f"[EMERGENCY] ⚠️ KILL SWITCH ACTIVATED by {current_user.email}")
+            print(f"[EMERGENCY]   Previous mode: {previous_mode}")
+            print(f"[EMERGENCY]   Actions cancelled: {len(stopped_actions)}")
+            
+            return {
+                "success": True,
+                "message": "Emergency stop activated - all autonomous operations halted",
+                "previous_mode": previous_mode,
+                "new_mode": "manual",
+                "actions_cancelled": len(stopped_actions),
+                "cancelled_action_ids": stopped_actions,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        else:
+            return {
+                "success": True,
+                "message": "Autonomous mode was not enabled",
+                "actions_cancelled": 0
+            }
+    except Exception as e:
+        print(f"[EMERGENCY] Kill switch error: {e}")
+        raise HTTPException(status_code=500, detail=f"Kill switch failed: {str(e)}")
+
+
+@app.post("/api/v3/autonomous/emergency-stop/public")
+async def emergency_stop_autonomous_public():
+    """
+    PUBLIC EMERGENCY KILL SWITCH - No auth required for critical situations
+    Should be protected by network-level controls (internal only)
+    """
+    from datetime import datetime, timezone
+    
+    try:
+        stopped_actions = []
+        
+        if AUTONOMOUS_ENABLED and autonomous_executor:
+            from src.autonomous_executor import ExecutionMode
+            previous_mode = autonomous_executor.execution_mode.value
+            autonomous_executor.set_execution_mode(ExecutionMode.MANUAL)
+            
+            # Cancel active actions
+            for action_id in list(autonomous_executor.active_actions.keys()):
+                stopped_actions.append(action_id)
+            autonomous_executor.active_actions.clear()
+            
+            # Record
+            emergency_record = {
+                "event": "emergency_stop_public",
+                "activated_at": datetime.now(timezone.utc).isoformat(),
+                "previous_mode": previous_mode
+            }
+            redis_client.lpush("autonomous_emergency_stops", json.dumps(emergency_record))
+            
+            print(f"[EMERGENCY] ⚠️ PUBLIC KILL SWITCH ACTIVATED")
+            
+            return {
+                "success": True,
+                "message": "Emergency stop activated",
+                "actions_cancelled": len(stopped_actions)
+            }
+        
+        return {"success": True, "message": "Autonomous not active"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/v3/autonomous/confidence-breakdown/{action_id}")
 async def get_confidence_breakdown(

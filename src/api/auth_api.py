@@ -296,7 +296,8 @@ async def request_password_reset(
         
         # Send email (implement later)
         # send_password_reset_email(user.email, token)
-        print(f"[PASSWORD RESET] Token for {user.email}: {token}")
+        # Token masked for security - only showing prefix
+        print(f"[PASSWORD RESET] Token issued for {user.email}: {token[:8]}...***MASKED***")
     
     return {
         "message": "If the email exists, a password reset link has been sent"
@@ -345,7 +346,8 @@ async def send_verification_email(
     
     # Send email (implement later)
     # send_verification_email_to_user(current_user.email, token)
-    print(f"[EMAIL VERIFY] Token for {current_user.email}: {token}")
+    # Token masked for security - only showing prefix
+    print(f"[EMAIL VERIFY] Token issued for {current_user.email}: {token[:8]}...***MASKED***")
     
     return {"message": "Verification email sent"}
 
