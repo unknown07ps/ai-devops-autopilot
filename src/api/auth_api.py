@@ -36,8 +36,29 @@ class RegisterRequest(BaseModel):
     
     @validator('password')
     def validate_password(cls, v):
+        """
+        Strong password enforcement:
+        - Minimum 8 characters
+        - At least one uppercase letter
+        - At least one lowercase letter  
+        - At least one number
+        - At least one special character
+        """
+        errors = []
+        
         if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters')
+            errors.append('at least 8 characters')
+        if not any(c.isupper() for c in v):
+            errors.append('at least one uppercase letter')
+        if not any(c.islower() for c in v):
+            errors.append('at least one lowercase letter')
+        if not any(c.isdigit() for c in v):
+            errors.append('at least one number')
+        if not any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in v):
+            errors.append('at least one special character (!@#$%^&*...)')
+        
+        if errors:
+            raise ValueError(f"Password must contain: {', '.join(errors)}")
         return v
 
 class LoginRequest(BaseModel):
@@ -75,8 +96,22 @@ class PasswordResetConfirm(BaseModel):
     
     @validator('new_password')
     def validate_password(cls, v):
+        """Strong password enforcement for password reset"""
+        errors = []
+        
         if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters')
+            errors.append('at least 8 characters')
+        if not any(c.isupper() for c in v):
+            errors.append('at least one uppercase letter')
+        if not any(c.islower() for c in v):
+            errors.append('at least one lowercase letter')
+        if not any(c.isdigit() for c in v):
+            errors.append('at least one number')
+        if not any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in v):
+            errors.append('at least one special character')
+        
+        if errors:
+            raise ValueError(f"Password must contain: {', '.join(errors)}")
         return v
 
 class RefreshTokenRequest(BaseModel):

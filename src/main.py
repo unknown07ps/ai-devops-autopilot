@@ -30,6 +30,7 @@ from src.api.auth_api import router as auth_router
 from src.api.subscription_api import router as subscription_router, check_access
 from src.api.razorpay_api import router as razorpay_router
 from src.api.dashboard_api import router as dashboard_router
+from src.api.suppression_api import router as suppression_router
 
 # Import notification and scheduling components
 from src.notifications.email import send_expiry_reminder_email
@@ -374,6 +375,7 @@ app.include_router(auth_router)
 app.include_router(subscription_router)
 app.include_router(razorpay_router)
 app.include_router(dashboard_router)
+app.include_router(suppression_router)
 
 # ============================================================================
 # Data Models

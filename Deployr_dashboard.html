@@ -916,6 +916,9 @@
         let refreshInterval = null;
         let subscription = null;
 
+        // Simple MD5 hash for Gravatar (minified)
+        function md5(s) { function L(k, d) { return (k << d) | (k >>> (32 - d)) } function K(G, k) { var I, d, F, H, x; F = (G & 2147483648); H = (k & 2147483648); I = (G & 1073741824); d = (k & 1073741824); x = (G & 1073741823) + (k & 1073741823); if (I & d) { return (x ^ 2147483648 ^ F ^ H) } if (I | d) { if (x & 1073741824) { return (x ^ 3221225472 ^ F ^ H) } else { return (x ^ 1073741824 ^ F ^ H) } } else { return (x ^ F ^ H) } } function r(d, F, k) { return (d & F) | ((~d) & k) } function q(d, F, k) { return (d & k) | (F & (~k)) } function p(d, F, k) { return (d ^ F ^ k) } function n(d, F, k) { return (F ^ (d | (~k))) } function u(G, F, aa, Z, k, H, I) { G = K(G, K(K(r(F, aa, Z), k), I)); return K(L(G, H), F) } function f(G, F, aa, Z, k, H, I) { G = K(G, K(K(q(F, aa, Z), k), I)); return K(L(G, H), F) } function D(G, F, aa, Z, k, H, I) { G = K(G, K(K(p(F, aa, Z), k), I)); return K(L(G, H), F) } function t(G, F, aa, Z, k, H, I) { G = K(G, K(K(n(F, aa, Z), k), I)); return K(L(G, H), F) } function e(G) { var Z; var F = G.length; var x = F + 8; var k = (x - (x % 64)) / 64; var I = (k + 1) * 16; var aa = Array(I - 1); var d = 0; var H = 0; while (H < F) { Z = (H - (H % 4)) / 4; d = (H % 4) * 8; aa[Z] = (aa[Z] | (G.charCodeAt(H) << d)); H++ } Z = (H - (H % 4)) / 4; d = (H % 4) * 8; aa[Z] = aa[Z] | (128 << d); aa[I - 2] = F << 3; aa[I - 1] = F >>> 29; return aa } function B(x) { var k = "", F = "", G, d; for (d = 0; d <= 3; d++) { G = (x >>> (d * 8)) & 255; F = "0" + G.toString(16); k = k + F.substr(F.length - 2, 2) } return k } var C = Array(); var P, h, E, v, g, Y, X, W, V; var S = 7, Q = 12, N = 17, M = 22; var A = 5, z = 9, y = 14, w = 20; var o = 4, m = 11, l = 16, j = 23; var J = 6, I = 10, H = 15, F = 21; s = s.replace(/\r\n/g, "\n"); var a = ""; for (var i = 0; i < s.length; i++) { var c = s.charCodeAt(i); if (c < 128) { a += String.fromCharCode(c) } else if ((c > 127) && (c < 2048)) { a += String.fromCharCode((c >> 6) | 192); a += String.fromCharCode((c & 63) | 128) } else { a += String.fromCharCode((c >> 12) | 224); a += String.fromCharCode(((c >> 6) & 63) | 128); a += String.fromCharCode((c & 63) | 128) } } C = e(a); Y = 1732584193; X = 4023233417; W = 2562383102; V = 271733878; for (P = 0; P < C.length; P += 16) { h = Y; E = X; v = W; g = V; Y = u(Y, X, W, V, C[P + 0], S, 3614090360); V = u(V, Y, X, W, C[P + 1], Q, 3905402710); W = u(W, V, Y, X, C[P + 2], N, 606105819); X = u(X, W, V, Y, C[P + 3], M, 3250441966); Y = u(Y, X, W, V, C[P + 4], S, 4118548399); V = u(V, Y, X, W, C[P + 5], Q, 1200080426); W = u(W, V, Y, X, C[P + 6], N, 2821735955); X = u(X, W, V, Y, C[P + 7], M, 4249261313); Y = u(Y, X, W, V, C[P + 8], S, 1770035416); V = u(V, Y, X, W, C[P + 9], Q, 2336552879); W = u(W, V, Y, X, C[P + 10], N, 4294925233); X = u(X, W, V, Y, C[P + 11], M, 2304563134); Y = u(Y, X, W, V, C[P + 12], S, 1804603682); V = u(V, Y, X, W, C[P + 13], Q, 4254626195); W = u(W, V, Y, X, C[P + 14], N, 2792965006); X = u(X, W, V, Y, C[P + 15], M, 1236535329); Y = f(Y, X, W, V, C[P + 1], A, 4129170786); V = f(V, Y, X, W, C[P + 6], z, 3225465664); W = f(W, V, Y, X, C[P + 11], y, 643717713); X = f(X, W, V, Y, C[P + 0], w, 3921069994); Y = f(Y, X, W, V, C[P + 5], A, 3593408605); V = f(V, Y, X, W, C[P + 10], z, 38016083); W = f(W, V, Y, X, C[P + 15], y, 3634488961); X = f(X, W, V, Y, C[P + 4], w, 3889429448); Y = f(Y, X, W, V, C[P + 9], A, 568446438); V = f(V, Y, X, W, C[P + 14], z, 3275163606); W = f(W, V, Y, X, C[P + 3], y, 4107603335); X = f(X, W, V, Y, C[P + 8], w, 1163531501); Y = f(Y, X, W, V, C[P + 13], A, 2850285829); V = f(V, Y, X, W, C[P + 2], z, 4243563512); W = f(W, V, Y, X, C[P + 7], y, 1735328473); X = f(X, W, V, Y, C[P + 12], w, 2368359562); Y = D(Y, X, W, V, C[P + 5], o, 4294588738); V = D(V, Y, X, W, C[P + 8], m, 2272392833); W = D(W, V, Y, X, C[P + 11], l, 1839030562); X = D(X, W, V, Y, C[P + 14], j, 4259657740); Y = D(Y, X, W, V, C[P + 1], o, 2763975236); V = D(V, Y, X, W, C[P + 4], m, 1272893353); W = D(W, V, Y, X, C[P + 7], l, 4139469664); X = D(X, W, V, Y, C[P + 10], j, 3200236656); Y = D(Y, X, W, V, C[P + 13], o, 681279174); V = D(V, Y, X, W, C[P + 0], m, 3936430074); W = D(W, V, Y, X, C[P + 3], l, 3572445317); X = D(X, W, V, Y, C[P + 6], j, 76029189); Y = D(Y, X, W, V, C[P + 9], o, 3654602809); V = D(V, Y, X, W, C[P + 12], m, 3873151461); W = D(W, V, Y, X, C[P + 15], l, 530742520); X = D(X, W, V, Y, C[P + 2], j, 3299628645); Y = t(Y, X, W, V, C[P + 0], J, 4096336452); V = t(V, Y, X, W, C[P + 7], I, 1126891415); W = t(W, V, Y, X, C[P + 14], H, 2878612391); X = t(X, W, V, Y, C[P + 5], F, 4237533241); Y = t(Y, X, W, V, C[P + 12], J, 1700485571); V = t(V, Y, X, W, C[P + 3], I, 2399980690); W = t(W, V, Y, X, C[P + 10], H, 4293915773); X = t(X, W, V, Y, C[P + 1], F, 2240044497); Y = t(Y, X, W, V, C[P + 8], J, 1873313359); V = t(V, Y, X, W, C[P + 15], I, 4264355552); W = t(W, V, Y, X, C[P + 6], H, 2734768916); X = t(X, W, V, Y, C[P + 13], F, 1309151649); Y = t(Y, X, W, V, C[P + 4], J, 4149444226); V = t(V, Y, X, W, C[P + 11], I, 3174756917); W = t(W, V, Y, X, C[P + 2], H, 718787259); X = t(X, W, V, Y, C[P + 9], F, 3951481745); Y = K(Y, h); X = K(X, E); W = K(W, v); V = K(V, g) } return (B(Y) + B(X) + B(W) + B(V)).toLowerCase() }
+
         // ============================================
         // AUTHENTICATION STATE
         // ============================================
@@ -944,9 +947,24 @@
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    authState.user = data.user;
+                    // API returns profile directly (email, subscription, etc.) not wrapped in user object
+                    authState.user = {
+                        email: data.email,
+                        full_name: data.full_name,
+                        company: data.company,
+                        user_id: data.user_id
+                    };
                     authState.subscription = data.subscription;
                     authState.isLoggedIn = true;
+
+                    // SYNC global subscription variable for feature gating
+                    if (data.subscription) {
+                        subscription = data.subscription;
+                    }
+
+                    // Re-render to update UI (banners, feature access, etc.)
+                    render();
+                    renderAuthUI();
                 } else if (res.status === 401) {
                     // Token expired, logout
                     logout();
@@ -1057,12 +1075,13 @@
                             
                             <div style="margin-bottom: 16px;">
                                 <label style="display: block; color: var(--text-secondary); margin-bottom: 8px; font-size: 0.9rem;">Email</label>
-                                <input type="email" id="auth-email" required style="width: 100%; padding: 12px 16px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; color: white; font-size: 1rem; box-sizing: border-box;" placeholder="you@example.com">
+                                <input type="email" id="auth-email" name="email" autocomplete="${isLogin ? 'username' : 'email'}" required style="width: 100%; padding: 12px 16px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; color: white; font-size: 1rem; box-sizing: border-box;" placeholder="you@example.com">
                             </div>
                             
                             <div style="margin-bottom: 24px;">
                                 <label style="display: block; color: var(--text-secondary); margin-bottom: 8px; font-size: 0.9rem;">Password</label>
-                                <input type="password" id="auth-password" required minlength="8" style="width: 100%; padding: 12px 16px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; color: white; font-size: 1rem; box-sizing: border-box;" placeholder="••••••••">
+                                <input type="password" id="auth-password" name="password" autocomplete="${isLogin ? 'current-password' : 'new-password'}" required minlength="8" style="width: 100%; padding: 12px 16px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; color: white; font-size: 1rem; box-sizing: border-box;" placeholder="••••••••">
+                                ${!isLogin ? '<p style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);">Min 8 chars: uppercase, lowercase, number, special char</p>' : ''}
                             </div>
                             
                             <button type="submit" style="width: 100%; padding: 14px; background: linear-gradient(135deg, var(--primary), var(--primary-light)); border: none; border-radius: 8px; color: white; font-weight: 600; font-size: 1rem; cursor: pointer; margin-bottom: 16px; box-shadow: 0 0 20px var(--primary-glow);">
@@ -1102,12 +1121,27 @@
 
             if (authState.isLoggedIn && authState.user) {
                 const plan = authState.subscription?.plan || 'FREE';
-                const planBadge = plan === 'enterprise' ? '👑 Enterprise' : plan === 'pro' ? '⭐ Pro' : plan === 'trial' ? '🎁 Trial' : '🆓 Free';
+                const planBadge = plan === 'enterprise' ? 'Enterprise' : plan === 'pro' ? 'Pro' : plan === 'trial' ? 'Trial' : 'Free';
+                const email = authState.user.email || '';
+                const initials = email.split('@')[0].substring(0, 2).toUpperCase();
+                // Use Gravatar for profile image (works with Google accounts)
+                const gravatarUrl = `https://www.gravatar.com/avatar/${md5(email.toLowerCase().trim())}?d=identicon&s=40`;
+
                 container.innerHTML = `
                     <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="text-align: right;">
-                            <div style="color: white; font-weight: 500; font-size: 0.9rem;">${authState.user.email}</div>
-                            <div style="color: var(--primary); font-size: 0.75rem;">${planBadge}</div>
+                        <div style="position: relative;">
+                            <img src="${gravatarUrl}" 
+                                 alt="Profile" 
+                                 style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--primary); object-fit: cover;"
+                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                            <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--primary-light)); border: 2px solid var(--primary); align-items: center; justify-content: center; font-weight: 600; font-size: 14px; color: #000;">
+                                ${initials}
+                            </div>
+                            <div style="position: absolute; bottom: -2px; right: -2px; background: var(--success); width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--bg-card);"></div>
+                        </div>
+                        <div style="text-align: left;">
+                            <div style="color: white; font-weight: 500; font-size: 0.85rem;">${authState.user.full_name || email.split('@')[0]}</div>
+                            <div style="color: var(--primary); font-size: 0.7rem;">${planBadge}</div>
                         </div>
                         <button onclick="logout()" style="padding: 8px 16px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; color: var(--text-secondary); cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">
                             Logout
@@ -1151,8 +1185,43 @@
             // Cloud cost integration
             selectedCloudProvider: null,
             cloudConnectionStatus: { connections: [], total_connected: 0 },
-            realCloudCosts: null
+            realCloudCosts: null,
+            // Suppression rules (user-configurable)
+            suppressionRules: {
+                duplicate: true,
+                flapping: true,
+                low_actionability: true,
+                maintenance: false
+            }
         };
+
+        // Toggle suppression rule
+        function toggleSuppressionRule(ruleId) {
+            const ruleMap = {
+                'rule_duplicate': 'duplicate',
+                'rule_flapping': 'flapping',
+                'rule_low_actionability': 'low_actionability',
+                'rule_maintenance': 'maintenance'
+            };
+            const stateKey = ruleMap[ruleId];
+            if (stateKey) {
+                state.suppressionRules[stateKey] = !state.suppressionRules[stateKey];
+                showNotification(`${ruleId.replace('rule_', '').replace('_', ' ')} ${state.suppressionRules[stateKey] ? 'enabled' : 'disabled'}`, 'info');
+                // Save to localStorage
+                localStorage.setItem('deployr_suppression_rules', JSON.stringify(state.suppressionRules));
+                render();
+            }
+        }
+
+        // Load suppression rules from localStorage
+        (function () {
+            const saved = localStorage.getItem('deployr_suppression_rules');
+            if (saved) {
+                try {
+                    state.suppressionRules = JSON.parse(saved);
+                } catch (e) { }
+            }
+        })();
 
         // Filter state for incidents view
         let incidentFilters = {
@@ -1788,7 +1857,7 @@
                         <div class="sidebar-footer">
                             <div class="upgrade-banner">
                                 <div class="upgrade-banner-title">
-                                    <i data-lucide="crown" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; margin-right: 4px;"></i>Upgrade to Pro
+                                    Upgrade to Pro
                                 </div>
                                 <div class="upgrade-banner-subtitle">
                                     ${subscription?.status === 'trialing' ? `${getDaysRemaining()} days left in trial` : 'Unlock all features'}
@@ -1867,17 +1936,34 @@
         }
 
         function renderSubscriptionBanner() {
-            if (!subscription) return '';
+            // Use authState.subscription for logged-in users, fallback to global subscription
+            const sub = (authState.isLoggedIn && authState.subscription) ? authState.subscription : subscription;
+
+            if (!sub) return '';
 
             const daysRemaining = getDaysRemaining();
 
-            // Trial active - banner removed, upgrade button is in header
-            if (subscription.status === 'trialing') {
+            // Trial active - no banner needed
+            if (sub.status === 'trialing') {
                 return '';
             }
 
-            // Trial expired
-            if (subscription.status === 'expired') {
+            // Active subscription (PRO or ENTERPRISE) - show success banner
+            if (sub.status === 'active') {
+                const planName = sub.plan === 'enterprise' ? 'Enterprise' : sub.plan === 'pro' ? 'Pro' : 'Active';
+                return `
+                    <div class="bg-gradient-to-r from-green-900/40 to-cyan-900/40 p-3 text-center border-b border-green-600/50">
+                        <div class="max-w-7xl mx-auto flex items-center justify-center gap-3">
+                            <span class="font-semibold text-green-300">
+                                ${planName} Plan Active ${sub.plan === 'enterprise' ? '- All Features Unlocked' : `- Next billing: ${new Date(sub.current_period_end).toLocaleDateString()}`}
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Trial expired - show warning ONLY if not logged in or subscription is truly expired
+            if (sub.status === 'expired') {
                 return `
                     <div class="bg-red-900/90 p-4 text-center border-b-2 border-red-600">
                         <div class="max-w-7xl mx-auto flex items-center justify-between">
@@ -1890,20 +1976,6 @@
                             <button onclick="showUpgradeModal()" class="bg-red-600 hover:bg-red-700 px-6 py-2 rounded-lg font-bold transition">
                                 Upgrade Now
                             </button>
-                        </div>
-                    </div>
-                `;
-            }
-
-            // Active subscription
-            if (subscription.status === 'active') {
-                return `
-                    <div class="bg-green-900/30 p-3 text-center border-b border-green-600">
-                        <div class="max-w-7xl mx-auto flex items-center justify-center gap-3">
-                            <i data-lucide="crown" class="text-yellow-500" style="width: 20px; height: 20px;"></i>
-                            <span class="font-semibold">
-                                Pro Plan Active - Next billing: ${new Date(subscription.current_period_end).toLocaleDateString()}
-                            </span>
                         </div>
                     </div>
                 `;
@@ -1950,7 +2022,6 @@
                                 ${renderModeIndicator(autoMode, isPremiumLocked)}
                                 ${subscription?.status !== 'active' ? `
                                     <button onclick="switchView('subscription')" class="px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition" style="background: rgba(0, 188, 212, 0.15); border: 1px solid var(--primary); color: var(--primary);">
-                                        <i class="data-lucide="crown" style="width: 16px; height: 16px;""></i>
                                         <span>Upgrade</span>
                                         ${subscription?.status === 'trialing' ? `<span class="text-xs opacity-75">(${getDaysRemaining()}d left)</span>` : ''}
                                     </button>
@@ -2629,7 +2700,7 @@
                             </div>
                             
                             <button onclick="handleUpgrade('ultimate')" class="subscription-btn w-full py-3 rounded-xl font-bold transition mt-8">
-                                <i class="data-lucide="crown" style="width: 16px; height: 16px;" mr-2"></i>Get Started
+                                Get Started
                             </button>
                         </div>
                     </div>
@@ -2706,7 +2777,7 @@
                                         Your trial has ended. Upgrade to Pro to restore AI monitoring, auto-remediation, and real-time alerts.
                                     </p>
                                     <button onclick="showUpgradeModal()" class="bg-orange-600 hover:bg-orange-700 px-6 py-3 rounded-lg font-bold transition">
-                                        <i class="data-lucide="crown" style="width: 16px; height: 16px;" mr-2"></i>Upgrade Now
+                                        Upgrade Now
                                     </button>
                                 </div>
                             </div>
@@ -5337,21 +5408,21 @@
                     <div class="card-glow rounded-xl p-6">
                         <h3 class="text-lg font-bold mb-4" style="color: var(--text-primary);">
                             <i data-lucide="filter" class="inline-block mr-2" style="width: 20px; height: 20px; color: var(--primary); vertical-align: middle;"></i>
-                            Suppression Rules Active
+                            Suppression Rules
                         </h3>
                         <div class="space-y-3">
                             ${[
-                    { rule: 'Duplicate Alert (5min window)', suppressed: suppression.duplicate_alert || 312, icon: 'copy' },
-                    { rule: 'Flapping Detection (5+ changes/10min)', suppressed: suppression.flapping_detection || 89, icon: 'repeat' },
-                    { rule: 'Low Actionability (<40%)', suppressed: suppression.low_actionability || 156, icon: 'thumb-down' },
-                    { rule: 'Maintenance Window', suppressed: suppression.maintenance_window || 55, icon: 'wrench' }
+                    { id: 'rule_duplicate', rule: 'Duplicate Alert (5min window)', enabled: state.suppressionRules?.duplicate ?? true },
+                    { id: 'rule_flapping', rule: 'Flapping Detection (5+ changes/10min)', enabled: state.suppressionRules?.flapping ?? true },
+                    { id: 'rule_low_actionability', rule: 'Low Actionability (<40%)', enabled: state.suppressionRules?.low_actionability ?? true },
+                    { id: 'rule_maintenance', rule: 'Maintenance Window', enabled: state.suppressionRules?.maintenance ?? false }
                 ].map(r => `
                                 <div class="flex items-center justify-between p-3 bg-black bg-opacity-30 rounded-lg">
-                                    <div class="flex items-center gap-3">
-                                        <i data-lucide="${r.icon}" style="width: 18px; height: 18px; color: var(--text-muted);"></i>
-                                        <span class="text-white">${r.rule}</span>
-                                    </div>
-                                    <span class="text-green-400 font-semibold">${r.suppressed} suppressed</span>
+                                    <span class="text-white">${r.rule}</span>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="toggleSuppressionRule('${r.id}')" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                                    </label>
                                 </div>
                             `).join('')}
                         </div>

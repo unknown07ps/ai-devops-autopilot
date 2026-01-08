@@ -1,32 +1,51 @@
+# ============================================================
+# Deployr AI DevOps Autopilot - Docker Compose
+# ============================================================
+# Full stack deployment with all dependencies
+# Usage: docker-compose up --build
+# ============================================================
+
 version: '3.8'
 
 services:
+  # --------------------------------------------------------
   # PostgreSQL Database
+  # --------------------------------------------------------
   postgres:
     image: postgres:16-alpine
     container_name: deployr-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: deployr
-      POSTGRES_USER: deployr
-      POSTGRES_PASSWORD: deployr_password
+      POSTGRES_DB: ${POSTGRES_DB:-deployr}
+      POSTGRES_USER: ${POSTGRES_USER:-deployr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-deployr_password}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./infra/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U deployr"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-deployr} -d ${POSTGRES_DB:-deployr}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     networks:
       - deployr-network
 
-  # Redis for event streaming and state
+  # --------------------------------------------------------
+  # Redis for Event Streaming and Cache
+  # --------------------------------------------------------
   redis:
     image: redis:7-alpine
     container_name: deployr-redis
-    command: redis-server --appendonly yes
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
     volumes:
@@ -39,56 +58,153 @@ services:
     networks:
       - deployr-network
 
-  # Main API service
+  # --------------------------------------------------------
+  # Main API Service
+  # --------------------------------------------------------
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: deployr-api
+    restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
+      # Database
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-deployr}:${POSTGRES_PASSWORD:-deployr_password}@postgres:5432/${POSTGRES_DB:-deployr}
+      # Redis
       - REDIS_URL=redis://redis:6379
-      - DATABASE_URL=postgresql://deployr:deployr_password@postgres:5432/deployr
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
-      - ENVIRONMENT=development
+      # Security
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-this-in-production}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+      # AI/LLM
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      # Notifications
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY:-}
+      # Payment
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-}
+      # Environment
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     depends_on:
       redis:
         condition: service_healthy
       postgres:
         condition: service_healthy
     volumes:
-      - ./src:/app/src
-    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+      - ./src:/app/src:ro
+      - ./logs:/app/logs
+    command: >
+      uvicorn src.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+      --log-level ${LOG_LEVEL:-info}
     networks:
       - deployr-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`api.deployr.local`)"
 
-  # Background worker for processing events
+  # --------------------------------------------------------
+  # Background Worker (Event Processing)
+  # --------------------------------------------------------
   worker:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: deployr-worker
+    restart: unless-stopped
     environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-deployr}:${POSTGRES_PASSWORD:-deployr_password}@postgres:5432/${POSTGRES_DB:-deployr}
       - REDIS_URL=redis://redis:6379
-      - DATABASE_URL=postgresql://deployr:deployr_password@postgres:5432/deployr
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+    volumes:
+      - ./src:/app/src:ro
+      - ./logs:/app/logs
+    command: python -m src.worker
+    networks:
+      - deployr-network
+
+  # --------------------------------------------------------
+  # Phase 3 Worker (Autonomous Execution)
+  # --------------------------------------------------------
+  worker-autonomous:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: deployr-worker-autonomous
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-deployr}:${POSTGRES_PASSWORD:-deployr_password}@postgres:5432/${POSTGRES_DB:-deployr}
+      - REDIS_URL=redis://redis:6379
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - AUTONOMOUS_MODE=${AUTONOMOUS_MODE:-supervised}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
     depends_on:
       redis:
         condition: service_healthy
       postgres:
         condition: service_healthy
     volumes:
-      - ./src:/app/src
-    command: python src/worker.py
+      - ./src:/app/src:ro
+      - ./logs:/app/logs
+    command: python -m src.worker_phase3
     networks:
       - deployr-network
 
-  # pgAdmin (optional - database management UI)
+  # --------------------------------------------------------
+  # Ollama (Local AI/LLM)
+  # --------------------------------------------------------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: deployr-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - deployr-network
+
+  # --------------------------------------------------------
+  # pgAdmin (Database Management UI)
+  # --------------------------------------------------------
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: deployr-pgadmin
+    restart: unless-stopped
+    profiles:
+      - tools
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@deployr.com
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@deployr.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
       - "5050:80"
@@ -99,27 +215,93 @@ services:
     networks:
       - deployr-network
 
-  # Ollama (for AI analysis)
-  ollama:
-    image: ollama/ollama:latest
-    container_name: deployr-ollama
+  # --------------------------------------------------------
+  # Prometheus (Metrics Collection)
+  # --------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: deployr-prometheus
+    restart: unless-stopped
+    profiles:
+      - monitoring
     ports:
-      - "11434:11434"
+      - "9090:9090"
     volumes:
-      - ollama_data:/root/.ollama
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
     networks:
       - deployr-network
 
+  # --------------------------------------------------------
+  # Grafana (Metrics Visualization)
+  # --------------------------------------------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: deployr-grafana
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - deployr-network
+
+  # --------------------------------------------------------
+  # Nginx (Reverse Proxy - Production)
+  # --------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: deployr-nginx
+    restart: unless-stopped
+    profiles:
+      - production
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/ssl:/etc/nginx/ssl:ro
+      - ./Deployr_dashboard.html:/usr/share/nginx/html/index.html:ro
+      - ./img:/usr/share/nginx/html/img:ro
+    depends_on:
+      - api
+    networks:
+      - deployr-network
+
+# ============================================================
+# Volumes
+# ============================================================
 volumes:
   postgres_data:
     driver: local
   redis_data:
     driver: local
-  pgadmin_data:
-    driver: local
   ollama_data:
     driver: local
+  pgadmin_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
 
+# ============================================================
+# Networks
+# ============================================================
 networks:
   deployr-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
