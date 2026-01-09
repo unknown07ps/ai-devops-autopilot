@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Overview - Deployr AI DevOps Autopilot</title>
+    <meta name="description"
+        content="Deployr is an AI-powered DevOps automation platform that detects, diagnoses, and resolves infrastructure issues autonomously.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00BCD4;
+            --primary-dark: #0097A7;
+            --primary-light: #4DD0E1;
+            --primary-glow: rgba(0, 188, 212, 0.4);
+            --bg-dark: #0D1117;
+            --bg-darker: #010409;
+            --bg-card: #161B22;
+            --bg-elevated: #21262D;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B8C4CE;
+            --text-muted: #64748B;
+            --border: #30363D;
+            --success: #22C55E;
+            --warning: #F59E0B;
+            --error: #EF4444;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+        }
+
+        .page-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 4rem;
+            padding-top: 2rem;
+        }
+
+        .page-title {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 1.25rem;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+
+        .text-primary {
+            color: var(--primary);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: #000;
+            font-weight: 600;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 0 20px var(--primary-glow);
+            transform: translateY(-2px);
+        }
+
+        .nav-back {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            transition: color 0.2s ease;
+        }
+
+        .nav-back:hover {
+            color: var(--primary);
+        }
+
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            background: rgba(0, 188, 212, 0.1);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+
+        .feature-icon i {
+            color: var(--primary);
+            font-size: 1.5rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <a href="../Deployr_dashboard.html" class="nav-back">
+            <i class="fas fa-arrow-left"></i>
+            Back to Dashboard
+        </a>
+
+        <header class="page-header">
+            <h1 class="page-title">AI DevOps Autopilot</h1>
+            <p class="page-subtitle">
+                Deployr is an autonomous DevOps platform that uses AI to detect, diagnose, and resolve
+                infrastructure issues before they impact your users.
+            </p>
+        </header>
+
+        <!-- What is Deployr -->
+        <section class="mb-12">
+            <h2 class="section-title mb-6">What is Deployr?</h2>
+            <div class="card">
+                <p class="text-lg mb-6" style="color: var(--text-secondary); line-height: 1.8;">
+                    Deployr is an AI-powered DevOps automation platform designed for mid-scale enterprises.
+                    It continuously monitors your infrastructure, detects anomalies using machine learning,
+                    and takes intelligent remediation actions—either autonomously or with human approval.
+                </p>
+                <p class="mb-6" style="color: var(--text-secondary); line-height: 1.8;">
+                    Our platform integrates with your existing monitoring stack (Prometheus, Grafana, Datadog)
+                    and cloud providers (AWS, Azure, GCP) to provide unified incident management and
+                    automated response capabilities.
+                </p>
+            </div>
+        </section>
+
+        <!-- Core Capabilities -->
+        <section class="mb-12">
+            <h2 class="section-title mb-6">Core Capabilities</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="card">
+                    <div class="feature-icon"><i class="fas fa-radar"></i></div>
+                    <h3 class="font-bold text-lg mb-2" style="color: var(--text-primary);">Anomaly Detection</h3>
+                    <p style="color: var(--text-muted);">
+                        Statistical and ML-based anomaly detection that learns your system's baseline behavior
+                        and alerts on deviations.
+                    </p>
+                </div>
+                <div class="card">
+                    <div class="feature-icon"><i class="fas fa-brain"></i></div>
+                    <h3 class="font-bold text-lg mb-2" style="color: var(--text-primary);">AI Analysis</h3>
+                    <p style="color: var(--text-muted);">
+                        Local LLM integration (Ollama) for root cause analysis and actionable recommendations
+                        without sending data externally.
+                    </p>
+                </div>
+                <div class="card">
+                    <div class="feature-icon"><i class="fas fa-bolt"></i></div>
+                    <h3 class="font-bold text-lg mb-2" style="color: var(--text-primary);">Autonomous Actions</h3>
+                    <p style="color: var(--text-muted);">
+                        Pre-built action library for Kubernetes, databases, and cloud resources with
+                        supervised or fully autonomous execution modes.
+                    </p>
+                </div>
+                <div class="card">
+                    <div class="feature-icon"><i class="fas fa-shield-halved"></i></div>
+                    <h3 class="font-bold text-lg mb-2" style="color: var(--text-primary);">Safety Rails</h3>
+                    <p style="color: var(--text-muted);">
+                        Rate limiting, blast radius protection, and rollback capabilities ensure actions
+                        are safe and reversible.
+                    </p>
+                </div>
+                <div class="card">
+                    <div class="feature-icon"><i class="fas fa-coins"></i></div>
+                    <h3 class="font-bold text-lg mb-2" style="color: var(--text-primary);">Cost Optimization</h3>
+                    <p style="color: var(--text-muted);">
+                        Multi-cloud cost visibility with AI-driven recommendations for reducing
+                        infrastructure spend.
+                    </p>
+                </div>
+                <div class="card">
+                    <div class="feature-icon"><i class="fas fa-clock-rotate-left"></i></div>
+                    <h3 class="font-bold text-lg mb-2" style="color: var(--text-primary);">Incident Timeline</h3>
+                    <p style="color: var(--text-muted);">
+                        Complete audit trail with deployment correlation, action history, and
+                        learning from past incidents.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It's Different -->
+        <section class="mb-12">
+            <h2 class="section-title mb-6">Why Deployr?</h2>
+            <div class="card">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <h3 class="font-bold text-lg mb-4 text-primary">Built for Mid-Scale</h3>
+                        <p style="color: var(--text-secondary); line-height: 1.8;">
+                            Enterprise-grade capabilities without enterprise complexity.
+                            Deploy in minutes, not months.
+                        </p>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg mb-4 text-primary">Privacy-First AI</h3>
+                        <p style="color: var(--text-secondary); line-height: 1.8;">
+                            Local LLM inference means your data never leaves your infrastructure.
+                            No external API calls required.
+                        </p>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg mb-4 text-primary">Human-in-the-Loop</h3>
+                        <p style="color: var(--text-secondary); line-height: 1.8;">
+                            Start with supervised mode where you approve every action.
+                            Graduate to autonomous as trust builds.
+                        </p>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg mb-4 text-primary">Learns From You</h3>
+                        <p style="color: var(--text-secondary); line-height: 1.8;">
+                            Every approval and rejection trains the system.
+                            Your operational knowledge becomes institutional memory.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA -->
+        <section class="text-center py-12">
+            <h2 class="section-title mb-4">Ready to automate your ops?</h2>
+            <p class="mb-8" style="color: var(--text-muted);">Start with a free trial. No credit card required.</p>
+            <a href="../Deployr_dashboard.html" class="btn-primary">Get Started</a>
+        </section>
+    </div>
+</body>
+
+</html>

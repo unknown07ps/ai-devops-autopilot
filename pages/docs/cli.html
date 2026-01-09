@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLI Tool - Deployr</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00BCD4;
+            --bg-dark: #0D1117;
+            --bg-darker: #010409;
+            --bg-card: #161B22;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B8C4CE;
+            --text-muted: #64748B;
+            --border: #30363D;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+
+        .page-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-top: 2rem;
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary) 0%, #4DD0E1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        .nav-back {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .nav-back:hover {
+            color: var(--primary);
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .code-block {
+            background: var(--bg-darker);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            overflow-x: auto;
+            margin-bottom: 1.5rem;
+        }
+
+        .code-block code {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .code-block .comment {
+            color: var(--text-muted);
+        }
+
+        .code-block .command {
+            color: var(--primary);
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .cmd-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .cmd-table th,
+        .cmd-table td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .cmd-table th {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .cmd-table td:first-child {
+            font-family: 'Fira Code', monospace;
+            color: var(--primary);
+            font-size: 0.875rem;
+        }
+
+        .cmd-table td:last-child {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <a href="index.html" class="nav-back"><i class="fas fa-arrow-left"></i> Back to Docs</a>
+
+        <header class="page-header">
+            <h1 class="page-title">CLI Tool</h1>
+            <p style="color: var(--text-secondary);">Command-line interface for Deployr</p>
+        </header>
+
+        <section style="margin-bottom: 3rem;">
+            <h2 class="section-title">Installation</h2>
+            <div class="code-block">
+                <code><span class="comment"># Install via pip</span><br>pip install deployr-cli<br><br><span class="comment"># Or download binary from GitHub releases</span><br>curl -L https://github.com/unknown07ps/deployr-cli/releases/latest/download/deployr-linux-amd64 -o deployr<br>chmod +x deployr<br>sudo mv deployr /usr/local/bin/</code>
+            </div>
+        </section>
+
+        <section style="margin-bottom: 3rem;">
+            <h2 class="section-title">Configuration</h2>
+            <div class="code-block">
+                <code><span class="comment"># Configure API endpoint and token</span><br><span class="command">deployr config set api-url</span> http://localhost:8000<br><span class="command">deployr config set api-token</span> your-api-token<br><br><span class="comment"># Verify configuration</span><br><span class="command">deployr config show</span></code>
+            </div>
+        </section>
+
+        <section style="margin-bottom: 3rem;">
+            <h2 class="section-title">Commands</h2>
+
+            <div class="card">
+                <h3 style="font-weight: 600; margin-bottom: 1rem;">Incidents</h3>
+                <table class="cmd-table">
+                    <tr>
+                        <th>Command</th>
+                        <th>Description</th>
+                    </tr>
+                    <tr>
+                        <td>deployr incidents list</td>
+                        <td>List all open incidents</td>
+                    </tr>
+                    <tr>
+                        <td>deployr incidents get {id}</td>
+                        <td>Get incident details</td>
+                    </tr>
+                    <tr>
+                        <td>deployr incidents ack {id}</td>
+                        <td>Acknowledge incident</td>
+                    </tr>
+                    <tr>
+                        <td>deployr incidents resolve {id}</td>
+                        <td>Resolve incident</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="card">
+                <h3 style="font-weight: 600; margin-bottom: 1rem;">Actions</h3>
+                <table class="cmd-table">
+                    <tr>
+                        <th>Command</th>
+                        <th>Description</th>
+                    </tr>
+                    <tr>
+                        <td>deployr actions pending</td>
+                        <td>List pending approvals</td>
+                    </tr>
+                    <tr>
+                        <td>deployr actions approve {id}</td>
+                        <td>Approve action</td>
+                    </tr>
+                    <tr>
+                        <td>deployr actions reject {id}</td>
+                        <td>Reject action</td>
+                    </tr>
+                    <tr>
+                        <td>deployr actions history</td>
+                        <td>Show action history</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="card">
+                <h3 style="font-weight: 600; margin-bottom: 1rem;">Status</h3>
+                <table class="cmd-table">
+                    <tr>
+                        <th>Command</th>
+                        <th>Description</th>
+                    </tr>
+                    <tr>
+                        <td>deployr status</td>
+                        <td>Quick health check</td>
+                    </tr>
+                    <tr>
+                        <td>deployr status detailed</td>
+                        <td>Component-level status</td>
+                    </tr>
+                    <tr>
+                        <td>deployr metrics</td>
+                        <td>Current system metrics</td>
+                    </tr>
+                </table>
+            </div>
+        </section>
+
+        <section>
+            <h2 class="section-title">Examples</h2>
+            <div class="code-block">
+                <code><span class="comment"># List recent incidents with severity</span><br><span class="command">deployr incidents list</span> --limit 10 --severity critical<br><br><span class="comment"># Approve all pending actions for a service</span><br><span class="command">deployr actions pending</span> --service api-gateway | <span class="command">deployr actions approve</span> --stdin<br><br><span class="comment"># Watch for new incidents in real-time</span><br><span class="command">deployr incidents watch</span></code>
+            </div>
+        </section>
+    </div>
+</body>
+
+</html>

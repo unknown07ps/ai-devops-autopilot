@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About Us - Deployr</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00BCD4;
+            --bg-dark: #0D1117;
+            --bg-darker: #010409;
+            --bg-card: #161B22;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B8C4CE;
+            --text-muted: #64748B;
+            --border: #30363D;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+
+        .page-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-top: 2rem;
+        }
+
+        .page-title {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary) 0%, #4DD0E1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        .nav-back {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .nav-back:hover {
+            color: var(--primary);
+        }
+
+        .section {
+            margin-bottom: 3rem;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+        }
+
+        .card p {
+            color: var(--text-secondary);
+            line-height: 1.8;
+            margin-bottom: 1rem;
+        }
+
+        .mission-box {
+            background: rgba(0, 188, 212, 0.1);
+            border: 1px solid var(--primary);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .mission-text {
+            font-size: 1.25rem;
+            color: var(--text-primary);
+            font-style: italic;
+        }
+
+        .values-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .value-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        .value-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .value-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .value-desc {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <a href="../Deployr_dashboard.html" class="nav-back"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+        <header class="page-header">
+            <h1 class="page-title">About Deployr</h1>
+            <p style="color: var(--text-secondary); font-size: 1.25rem;">Fix the oops. Without Ops.</p>
+        </header>
+
+        <div class="mission-box">
+            <p class="mission-text">"We believe DevOps teams shouldn't be woken up at 3 AM for problems that can be
+                solved automatically."</p>
+        </div>
+
+        <section class="section">
+            <h2 class="section-title">Our Story</h2>
+            <div class="card">
+                <p>Deployr was born from the frustration of endless on-call rotations, alert fatigue, and the
+                    realization that most infrastructure incidents follow predictable patterns that experienced
+                    engineers solve in their sleep.</p>
+                <p>We set out to build what we wished existed: an AI system that learns from your best engineers and
+                    handles incidents the way they would—quickly, safely, and with proper documentation.</p>
+                <p>Today, Deployr helps mid-scale enterprises reduce their mean time to resolution (MTTR) and gives
+                    their DevOps teams back their nights and weekends.</p>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">Our Values</h2>
+            <div class="values-grid">
+                <div class="value-card">
+                    <div class="value-icon">🔒</div>
+                    <h3 class="value-title">Privacy First</h3>
+                    <p class="value-desc">Your data stays on your infrastructure. We built local AI inference because we
+                        believe you shouldn't have to choose between intelligence and privacy.</p>
+                </div>
+                <div class="value-card">
+                    <div class="value-icon">🛡️</div>
+                    <h3 class="value-title">Safety by Design</h3>
+                    <p class="value-desc">Every automated action has safety rails, rollback capabilities, and human
+                        approval options. We'd rather do nothing than do harm.</p>
+                </div>
+                <div class="value-card">
+                    <div class="value-icon">🎯</div>
+                    <h3 class="value-title">Engineer-Focused</h3>
+                    <p class="value-desc">We build tools that engineers actually want to use. No flashy dashboards that
+                        hide the truth—just clear, actionable insights.</p>
+                </div>
+                <div class="value-card">
+                    <div class="value-icon">📖</div>
+                    <h3 class="value-title">Transparent</h3>
+                    <p class="value-desc">Every decision the AI makes is explainable. We show our work so you can
+                        trust—and improve—our recommendations.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">Connect With Us</h2>
+            <div class="card" style="text-align: center;">
+                <p style="margin-bottom: 1.5rem;">Interested in what we're building? Follow our journey.</p>
+                <div style="display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap;">
+                    <a href="https://github.com/unknown07ps" target="_blank"
+                        style="color: var(--text-secondary); text-decoration: none; display: flex; align-items: center; gap: 0.5rem;"><i
+                            class="fab fa-github" style="font-size: 1.5rem;"></i> GitHub</a>
+                    <a href="https://www.linkedin.com/in/sagar-prajapati-7b99822b4/" target="_blank"
+                        style="color: var(--text-secondary); text-decoration: none; display: flex; align-items: center; gap: 0.5rem;"><i
+                            class="fab fa-linkedin" style="font-size: 1.5rem;"></i> LinkedIn</a>
+                </div>
+            </div>
+        </section>
+    </div>
+</body>
+
+</html>

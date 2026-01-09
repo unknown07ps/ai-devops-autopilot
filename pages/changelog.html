@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Changelog - Deployr</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00BCD4;
+            --bg-dark: #0D1117;
+            --bg-darker: #010409;
+            --bg-card: #161B22;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B8C4CE;
+            --text-muted: #64748B;
+            --border: #30363D;
+            --success: #22C55E;
+            --warning: #F59E0B;
+            --info: #3B82F6;
+            --purple: #A855F7;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+
+        .page-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-top: 2rem;
+        }
+
+        .page-title {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary) 0%, #4DD0E1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        .nav-back {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .nav-back:hover {
+            color: var(--primary);
+        }
+
+        .release {
+            margin-bottom: 3rem;
+            padding-left: 2rem;
+            border-left: 2px solid var(--border);
+            position: relative;
+        }
+
+        .release::before {
+            content: '';
+            position: absolute;
+            left: -6px;
+            top: 0;
+            width: 10px;
+            height: 10px;
+            background: var(--primary);
+            border-radius: 50%;
+        }
+
+        .release-header {
+            margin-bottom: 1rem;
+        }
+
+        .release-version {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .release-date {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-left: 1rem;
+        }
+
+        .release-tag {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .release-tag.latest {
+            background: rgba(0, 188, 212, 0.2);
+            color: var(--primary);
+        }
+
+        .change-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .change-type {
+            font-weight: 600;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .change-type.added {
+            color: var(--success);
+        }
+
+        .change-type.improved {
+            color: var(--info);
+        }
+
+        .change-type.fixed {
+            color: var(--warning);
+        }
+
+        .change-type.security {
+            color: var(--purple);
+        }
+
+        .change-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .change-list li {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            padding: 0.5rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+            line-height: 1.6;
+        }
+
+        .change-list li::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <a href="../Deployr_dashboard.html" class="nav-back"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+        <header class="page-header">
+            <h1 class="page-title">Changelog</h1>
+            <p style="color: var(--text-secondary);">Track all updates, improvements, and fixes</p>
+        </header>
+
+        <!-- v0.3.0 -->
+        <div class="release">
+            <div class="release-header">
+                <span class="release-version">v0.3.0</span>
+                <span class="release-date">January 2026</span>
+                <span class="release-tag latest">LATEST</span>
+            </div>
+            <div class="change-group">
+                <div class="change-type added"><i class="fas fa-plus-circle"></i> Added</div>
+                <ul class="change-list">
+                    <li>Circuit breaker pattern for external service resilience</li>
+                    <li>Distributed trace ID propagation across API and workers</li>
+                    <li>Prometheus metrics endpoint (/metrics)</li>
+                    <li>Production readiness check script</li>
+                    <li>Comprehensive footer with documentation pages</li>
+                </ul>
+            </div>
+            <div class="change-group">
+                <div class="change-type improved"><i class="fas fa-arrow-up-right-dots"></i> Improved</div>
+                <ul class="change-list">
+                    <li>Rate limiting coverage extended to all public endpoints</li>
+                    <li>Razorpay webhook signature verification hardened</li>
+                    <li>Exception handling with specific error types instead of bare except</li>
+                </ul>
+            </div>
+            <div class="change-group">
+                <div class="change-type security"><i class="fas fa-shield-halved"></i> Security</div>
+                <ul class="change-list">
+                    <li>JWT authentication with secure session management</li>
+                    <li>Input validation using Pydantic models</li>
+                    <li>IP-based logging for webhook signature failures</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- v0.2.0 -->
+        <div class="release">
+            <div class="release-header">
+                <span class="release-version">v0.2.0</span>
+                <span class="release-date">December 2025</span>
+            </div>
+            <div class="change-group">
+                <div class="change-type added"><i class="fas fa-plus-circle"></i> Added</div>
+                <ul class="change-list">
+                    <li>Autonomous execution mode (Phase 3)</li>
+                    <li>Multi-cloud cost integration (AWS, Azure, GCP)</li>
+                    <li>Custom runbook engine</li>
+                    <li>Senior knowledge base for AI analysis</li>
+                </ul>
+            </div>
+            <div class="change-group">
+                <div class="change-type improved"><i class="fas fa-arrow-up-right-dots"></i> Improved</div>
+                <ul class="change-list">
+                    <li>Action library expanded with 50+ pre-built actions</li>
+                    <li>Dashboard performance optimizations</li>
+                    <li>Slack notification formatting</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- v0.1.0 -->
+        <div class="release">
+            <div class="release-header">
+                <span class="release-version">v0.1.0</span>
+                <span class="release-date">November 2025</span>
+            </div>
+            <div class="change-group">
+                <div class="change-type added"><i class="fas fa-plus-circle"></i> Added</div>
+                <ul class="change-list">
+                    <li>Initial release</li>
+                    <li>Anomaly detection with statistical baselines</li>
+                    <li>AI-powered root cause analysis (Ollama)</li>
+                    <li>Supervised action approval workflow</li>
+                    <li>Slack integration for notifications</li>
+                    <li>Real-time dashboard</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

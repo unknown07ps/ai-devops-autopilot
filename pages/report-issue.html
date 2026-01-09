@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report an Issue - Deployr</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00BCD4;
+            --bg-dark: #0D1117;
+            --bg-darker: #010409;
+            --bg-card: #161B22;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B8C4CE;
+            --text-muted: #64748B;
+            --border: #30363D;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+
+        .page-container {
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding-top: 2rem;
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-back {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .nav-back:hover {
+            color: var(--primary);
+        }
+
+        .form-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .form-label .required {
+            color: #EF4444;
+        }
+
+        .form-input,
+        .form-select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .form-input:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .form-textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+
+        .form-select {
+            cursor: pointer;
+        }
+
+        .form-select option {
+            background: var(--bg-dark);
+        }
+
+        .form-btn {
+            width: 100%;
+            padding: 0.875rem;
+            background: var(--primary);
+            color: #000;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-btn:hover {
+            box-shadow: 0 0 20px rgba(0, 188, 212, 0.4);
+        }
+
+        .info-box {
+            background: rgba(0, 188, 212, 0.1);
+            border: 1px solid var(--primary);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .info-box p {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <a href="../Deployr_dashboard.html" class="nav-back"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+        <header class="page-header">
+            <h1 class="page-title">Report an Issue</h1>
+            <p style="color: var(--text-secondary);">Help us improve by reporting bugs or problems</p>
+        </header>
+
+        <div class="form-card">
+            <div class="info-box">
+                <p><i class="fas fa-info-circle" style="color: var(--primary); margin-right: 0.5rem;"></i>For security
+                    vulnerabilities, please use our <a href="legal/security-disclosure.html"
+                        style="color: var(--primary);">responsible disclosure</a> process instead.</p>
+            </div>
+
+            <form
+                onsubmit="event.preventDefault(); alert('Issue reported! We\'ll investigate and get back to you. Reference #' + Math.random().toString(36).substr(2, 8).toUpperCase());">
+                <div class="form-group">
+                    <label class="form-label">Issue Type <span class="required">*</span></label>
+                    <select class="form-select" required>
+                        <option value="">Select type...</option>
+                        <option value="bug">Bug / Error</option>
+                        <option value="performance">Performance Issue</option>
+                        <option value="ui">UI / Display Problem</option>
+                        <option value="integration">Integration Issue</option>
+                        <option value="documentation">Documentation Error</option>
+                        <option value="feature">Feature Request</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Subject <span class="required">*</span></label>
+                    <input type="text" class="form-input" placeholder="Brief description of the issue" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Description <span class="required">*</span></label>
+                    <textarea class="form-input form-textarea" placeholder="Please include:
+• What you were trying to do
+• What happened instead
+• Steps to reproduce (if applicable)
+• Any error messages" required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Your Email <span class="required">*</span></label>
+                    <input type="email" class="form-input" placeholder="your@email.com" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Browser / Environment</label>
+                    <input type="text" class="form-input" placeholder="e.g., Chrome 120, Windows 11">
+                </div>
+
+                <button type="submit" class="form-btn">Submit Issue Report</button>
+            </form>
+        </div>
+    </div>
+</body>
+
+</html>

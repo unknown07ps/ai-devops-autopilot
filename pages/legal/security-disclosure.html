@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Disclosure - Deployr</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --primary: #00BCD4;
+            --bg-dark: #0D1117;
+            --bg-darker: #010409;
+            --bg-card: #161B22;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B8C4CE;
+            --text-muted: #64748B;
+            --border: #30363D;
+            --success: #22C55E;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+
+        .page-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+            padding-top: 2rem;
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-back {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .nav-back:hover {
+            color: var(--primary);
+        }
+
+        .content {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+        }
+
+        .content h2 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin: 2rem 0 1rem;
+            color: var(--text-primary);
+        }
+
+        .content h2:first-child {
+            margin-top: 0;
+        }
+
+        .content p,
+        .content li {
+            color: var(--text-secondary);
+            line-height: 1.8;
+            margin-bottom: 1rem;
+        }
+
+        .content ul {
+            padding-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .highlight-box {
+            background: rgba(0, 188, 212, 0.1);
+            border: 1px solid var(--primary);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .highlight-box h3 {
+            color: var(--primary);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <a href="../../Deployr_dashboard.html" class="nav-back">← Back to Dashboard</a>
+
+        <header class="page-header">
+            <h1 class="page-title">Responsible Disclosure</h1>
+            <p style="color: var(--text-muted);">Security vulnerability reporting program</p>
+        </header>
+
+        <div class="content">
+            <h2>Our Commitment</h2>
+            <p>We take the security of our platform seriously. We appreciate the work of security researchers who help
+                us keep our users safe. If you discover a security vulnerability, we encourage you to report it
+                responsibly.</p>
+
+            <div class="highlight-box">
+                <h3>Report a Vulnerability</h3>
+                <p style="margin-bottom: 0;">Email: <a href="mailto:security@deployr.com"
+                        style="color: var(--primary);">security@deployr.com</a></p>
+            </div>
+
+            <h2>Scope</h2>
+            <p>The following systems are in scope for security research:</p>
+            <ul>
+                <li>Deployr Dashboard (*.deployr.com)</li>
+                <li>Deployr API endpoints</li>
+                <li>Open source components on GitHub</li>
+            </ul>
+
+            <h2>Out of Scope</h2>
+            <ul>
+                <li>Social engineering attacks</li>
+                <li>Physical security attacks</li>
+                <li>Denial of service attacks</li>
+                <li>Automated scanning without coordination</li>
+                <li>Third-party services we use</li>
+            </ul>
+
+            <h2>What to Include in Your Report</h2>
+            <ul>
+                <li>Description of the vulnerability</li>
+                <li>Steps to reproduce</li>
+                <li>Potential impact</li>
+                <li>Any proof-of-concept code</li>
+                <li>Your contact information</li>
+            </ul>
+
+            <h2>Our Promise</h2>
+            <ul>
+                <li>We will acknowledge receipt within 24 hours</li>
+                <li>We will provide an initial assessment within 72 hours</li>
+                <li>We will keep you informed of our progress</li>
+                <li>We will not pursue legal action against researchers acting in good faith</li>
+                <li>We will credit you (if desired) when the vulnerability is fixed</li>
+            </ul>
+
+            <h2>Safe Harbor</h2>
+            <p>We consider security research conducted in accordance with this policy to be authorized. We will not
+                pursue civil or criminal action against researchers who:</p>
+            <ul>
+                <li>Make a good faith effort to avoid privacy violations</li>
+                <li>Do not exploit vulnerabilities beyond what is necessary to demonstrate them</li>
+                <li>Do not access, modify, or delete data belonging to other users</li>
+                <li>Report vulnerabilities promptly and do not disclose publicly before a fix is available</li>
+            </ul>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SDKs & Integrations - Deployr</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00BCD4;
+            --primary-glow: rgba(0, 188, 212, 0.4);
+            --bg-dark: #0D1117;
+            --bg-darker: #010409;
+            --bg-card: #161B22;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B8C4CE;
+            --text-muted: #64748B;
+            --border: #30363D;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+
+        .page-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-top: 2rem;
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary) 0%, #4DD0E1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        .nav-back {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .nav-back:hover {
+            color: var(--primary);
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+        }
+
+        .sdk-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .sdk-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .sdk-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        .sdk-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .sdk-name {
+            font-weight: 600;
+            font-size: 1.125rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .sdk-desc {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+        }
+
+        .code-block {
+            background: var(--bg-darker);
+            border-radius: 6px;
+            padding: 0.75rem 1rem;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .integration-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .integration-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--bg-elevated);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .integration-content h4 {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .integration-content p {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.125rem 0.5rem;
+            background: rgba(0, 188, 212, 0.2);
+            color: var(--primary);
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <a href="index.html" class="nav-back"><i class="fas fa-arrow-left"></i> Back to Docs</a>
+
+        <header class="page-header">
+            <h1 class="page-title">SDKs & Integrations</h1>
+            <p style="color: var(--text-secondary);">Client libraries and integration guides</p>
+        </header>
+
+        <section style="margin-bottom: 3rem;">
+            <h2 class="section-title">Official SDKs</h2>
+            <div class="sdk-grid">
+                <div class="sdk-card">
+                    <div class="sdk-icon">🐍</div>
+                    <h3 class="sdk-name">Python SDK</h3>
+                    <p class="sdk-desc">Official Python client for Deployr API</p>
+                    <div class="code-block">
+                        <code>pip install deployr-sdk</code>
+                    </div>
+                </div>
+                <div class="sdk-card">
+                    <div class="sdk-icon">📦</div>
+                    <h3 class="sdk-name">JavaScript SDK</h3>
+                    <p class="sdk-desc">Node.js and browser client</p>
+                    <div class="code-block">
+                        <code>npm install @deployr/sdk</code>
+                    </div>
+                </div>
+                <div class="sdk-card">
+                    <div class="sdk-icon">🔷</div>
+                    <h3 class="sdk-name">Go SDK <span class="badge">COMING SOON</span></h3>
+                    <p class="sdk-desc">Go client library</p>
+                    <div class="code-block">
+                        <code>go get github.com/deployr/go-sdk</code>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section style="margin-bottom: 3rem;">
+            <h2 class="section-title">Monitoring Integrations</h2>
+            <div class="integration-card">
+                <div class="integration-icon">📊</div>
+                <div class="integration-content">
+                    <h4>Prometheus</h4>
+                    <p>Send metrics via remote_write to Deployr's ingestion endpoint.</p>
+                </div>
+            </div>
+            <div class="integration-card">
+                <div class="integration-icon">📈</div>
+                <div class="integration-content">
+                    <h4>Grafana</h4>
+                    <p>View Deployr incidents and actions directly in your Grafana dashboards.</p>
+                </div>
+            </div>
+            <div class="integration-card">
+                <div class="integration-icon">🐕</div>
+                <div class="integration-content">
+                    <h4>Datadog</h4>
+                    <p>Forward Datadog alerts to Deployr for AI-powered analysis.</p>
+                </div>
+            </div>
+        </section>
+
+        <section style="margin-bottom: 3rem;">
+            <h2 class="section-title">Notification Integrations</h2>
+            <div class="integration-card">
+                <div class="integration-icon"><i class="fab fa-slack" style="color: #E01E5A;"></i></div>
+                <div class="integration-content">
+                    <h4>Slack</h4>
+                    <p>Rich incident notifications with interactive approval buttons.</p>
+                </div>
+            </div>
+            <div class="integration-card">
+                <div class="integration-icon">📧</div>
+                <div class="integration-content">
+                    <h4>Email (SendGrid)</h4>
+                    <p>Email notifications for critical incidents and daily summaries.</p>
+                </div>
+            </div>
+            <div class="integration-card">
+                <div class="integration-icon">📱</div>
+                <div class="integration-content">
+                    <h4>PagerDuty <span class="badge">COMING SOON</span></h4>
+                    <p>Escalate critical incidents to your on-call rotation.</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2 class="section-title">Cloud Providers</h2>
+            <div class="sdk-grid">
+                <div class="integration-card" style="flex-direction: column; align-items: flex-start;">
+                    <div class="integration-icon" style="margin-bottom: 1rem;"><i class="fab fa-aws"
+                            style="color: #FF9900;"></i></div>
+                    <h4 style="font-weight: 600;">Amazon Web Services</h4>
+                    <p style="color: var(--text-muted); font-size: 0.875rem;">EC2, EKS, RDS, Lambda actions and cost
+                        integration.</p>
+                </div>
+                <div class="integration-card" style="flex-direction: column; align-items: flex-start;">
+                    <div class="integration-icon" style="margin-bottom: 1rem;"><i class="fab fa-google"
+                            style="color: #4285F4;"></i></div>
+                    <h4 style="font-weight: 600;">Google Cloud Platform</h4>
+                    <p style="color: var(--text-muted); font-size: 0.875rem;">GKE, Compute Engine, Cloud SQL actions and
+                        billing.</p>
+                </div>
+                <div class="integration-card" style="flex-direction: column; align-items: flex-start;">
+                    <div class="integration-icon" style="margin-bottom: 1rem;"><i class="fab fa-microsoft"
+                            style="color: #0078D4;"></i></div>
+                    <h4 style="font-weight: 600;">Microsoft Azure</h4>
+                    <p style="color: var(--text-muted); font-size: 0.875rem;">AKS, Virtual Machines, Azure SQL actions
+                        and costs.</p>
+                </div>
+            </div>
+        </section>
+    </div>
+</body>
+
+</html>

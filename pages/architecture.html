@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture - Deployr AI DevOps Autopilot</title>
+    <meta name="description" content="Learn how Deployr's AI-powered DevOps automation platform works under the hood.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00BCD4;
+            --primary-glow: rgba(0, 188, 212, 0.4);
+            --bg-dark: #0D1117;
+            --bg-darker: #010409;
+            --bg-card: #161B22;
+            --bg-elevated: #21262D;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B8C4CE;
+            --text-muted: #64748B;
+            --border: #30363D;
+            --success: #22C55E;
+            --info: #3B82F6;
+            --purple: #A855F7;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+
+        .page-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 4rem;
+            padding-top: 2rem;
+        }
+
+        .page-title {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary) 0%, #4DD0E1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 1.25rem;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .nav-back {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .nav-back:hover {
+            color: var(--primary);
+        }
+
+        .arch-diagram {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 3rem;
+            margin-bottom: 3rem;
+        }
+
+        .arch-layer {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 2rem;
+        }
+
+        .arch-box {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            text-align: center;
+            min-width: 140px;
+            transition: all 0.3s ease;
+        }
+
+        .arch-box:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 15px var(--primary-glow);
+        }
+
+        .arch-box.primary {
+            border-color: var(--primary);
+            background: rgba(0, 188, 212, 0.1);
+        }
+
+        .arch-box.info {
+            border-color: var(--info);
+        }
+
+        .arch-box.purple {
+            border-color: var(--purple);
+        }
+
+        .arch-box.success {
+            border-color: var(--success);
+        }
+
+        .arch-box h4 {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            font-size: 0.9rem;
+        }
+
+        .arch-box p {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .arch-arrow {
+            text-align: center;
+            color: var(--text-muted);
+            margin: 1rem 0;
+            font-size: 1.5rem;
+        }
+
+        .layer-label {
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.75rem;
+            text-align: center;
+        }
+
+        .flow-section {
+            margin-bottom: 3rem;
+        }
+
+        .flow-step {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+
+        .flow-number {
+            width: 40px;
+            height: 40px;
+            background: var(--primary);
+            color: #000;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .flow-content h4 {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .flow-content p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <a href="../Deployr_dashboard.html" class="nav-back"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+        <header class="page-header">
+            <h1 class="page-title">How It Works</h1>
+            <p class="page-subtitle">A look inside Deployr's architecture and data flow</p>
+        </header>
+
+        <!-- Architecture Diagram -->
+        <div class="arch-diagram">
+            <div class="layer-label">Data Sources</div>
+            <div class="arch-layer">
+                <div class="arch-box info">
+                    <h4><i class="fas fa-chart-line"></i> Prometheus</h4>
+                    <p>Metrics</p>
+                </div>
+                <div class="arch-box info">
+                    <h4><i class="fas fa-file-alt"></i> Logs</h4>
+                    <p>Application Logs</p>
+                </div>
+                <div class="arch-box info">
+                    <h4><i class="fas fa-code-branch"></i> GitHub</h4>
+                    <p>Deployments</p>
+                </div>
+                <div class="arch-box info">
+                    <h4><i class="fas fa-cloud"></i> Cloud APIs</h4>
+                    <p>AWS / Azure / GCP</p>
+                </div>
+            </div>
+
+            <div class="arch-arrow"><i class="fas fa-arrow-down"></i></div>
+
+            <div class="layer-label">Ingestion Layer</div>
+            <div class="arch-layer">
+                <div class="arch-box primary">
+                    <h4>API Gateway</h4>
+                    <p>FastAPI + Rate Limiting</p>
+                </div>
+                <div class="arch-box primary">
+                    <h4>Redis Streams</h4>
+                    <p>Event Queue</p>
+                </div>
+            </div>
+
+            <div class="arch-arrow"><i class="fas fa-arrow-down"></i></div>
+
+            <div class="layer-label">Processing Layer</div>
+            <div class="arch-layer">
+                <div class="arch-box purple">
+                    <h4>Anomaly Detector</h4>
+                    <p>Statistical Analysis</p>
+                </div>
+                <div class="arch-box purple">
+                    <h4>AI Analyzer</h4>
+                    <p>Ollama LLM</p>
+                </div>
+                <div class="arch-box purple">
+                    <h4>Correlation Engine</h4>
+                    <p>Incident Linking</p>
+                </div>
+            </div>
+
+            <div class="arch-arrow"><i class="fas fa-arrow-down"></i></div>
+
+            <div class="layer-label">Action Layer</div>
+            <div class="arch-layer">
+                <div class="arch-box success">
+                    <h4>Action Library</h4>
+                    <p>K8s / DB / Cloud</p>
+                </div>
+                <div class="arch-box success">
+                    <h4>Approval Queue</h4>
+                    <p>Human-in-Loop</p>
+                </div>
+                <div class="arch-box success">
+                    <h4>Executor</h4>
+                    <p>Safe Execution</p>
+                </div>
+            </div>
+
+            <div class="arch-arrow"><i class="fas fa-arrow-down"></i></div>
+
+            <div class="layer-label">Storage</div>
+            <div class="arch-layer">
+                <div class="arch-box">
+                    <h4>PostgreSQL</h4>
+                    <p>Persistent Data</p>
+                </div>
+                <div class="arch-box">
+                    <h4>Redis</h4>
+                    <p>Cache / State</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Flow -->
+        <section class="flow-section">
+            <h2 class="section-title">Data Flow</h2>
+
+            <div class="flow-step">
+                <div class="flow-number">1</div>
+                <div class="flow-content">
+                    <h4>Ingestion</h4>
+                    <p>Metrics arrive via Prometheus remote_write, logs via HTTP POST, and deployments via GitHub
+                        webhooks. All data is timestamped and queued in Redis streams for processing.</p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-number">2</div>
+                <div class="flow-content">
+                    <h4>Detection</h4>
+                    <p>Background workers consume the streams. The anomaly detector compares current values against
+                        rolling baselines using z-score analysis. Anomalies exceeding the threshold (default 2.5σ) are
+                        flagged.</p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-number">3</div>
+                <div class="flow-content">
+                    <h4>Analysis</h4>
+                    <p>Flagged anomalies are enriched with context (recent deployments, related logs, historical
+                        incidents) and sent to the local LLM for root cause analysis. The AI returns a diagnosis and
+                        suggested actions.</p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-number">4</div>
+                <div class="flow-content">
+                    <h4>Action Proposal</h4>
+                    <p>Suggested actions are evaluated against safety rules (blast radius, rate limits). Valid actions
+                        are queued for approval or auto-executed based on the operating mode (supervised vs autonomous).
+                    </p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-number">5</div>
+                <div class="flow-content">
+                    <h4>Execution</h4>
+                    <p>Approved actions are executed via the appropriate provider (kubectl, cloud SDK, database client).
+                        Pre and post-execution metrics are captured for impact assessment.</p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-number">6</div>
+                <div class="flow-content">
+                    <h4>Learning</h4>
+                    <p>Outcomes (success, failure, rollback) are fed back into the learning engine. Successful patterns
+                        increase confidence scores; failures trigger alerts and lower future auto-approval thresholds.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Key Components -->
+        <section>
+            <h2 class="section-title">Key Components</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="flow-step" style="margin-bottom: 0;">
+                    <div class="flow-content">
+                        <h4>API Server (FastAPI)</h4>
+                        <p>RESTful API for dashboard, integrations, and data ingestion. Includes authentication, rate
+                            limiting, and request validation.</p>
+                    </div>
+                </div>
+                <div class="flow-step" style="margin-bottom: 0;">
+                    <div class="flow-content">
+                        <h4>Background Workers</h4>
+                        <p>Async processors for anomaly detection, AI analysis, and action execution. Scaled
+                            independently based on queue depth.</p>
+                    </div>
+                </div>
+                <div class="flow-step" style="margin-bottom: 0;">
+                    <div class="flow-content">
+                        <h4>Ollama (LLM)</h4>
+                        <p>Local AI inference for privacy. Supports Llama 3, Mistral, and custom fine-tuned models. No
+                            external API calls.</p>
+                    </div>
+                </div>
+                <div class="flow-step" style="margin-bottom: 0;">
+                    <div class="flow-content">
+                        <h4>Action Executor</h4>
+                        <p>Sandboxed execution environment with timeout handling, rollback capabilities, and
+                            comprehensive audit logging.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentation - Deployr</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00BCD4;
+            --primary-glow: rgba(0, 188, 212, 0.4);
+            --bg-dark: #0D1117;
+            --bg-darker: #010409;
+            --bg-card: #161B22;
+            --bg-elevated: #21262D;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B8C4CE;
+            --text-muted: #64748B;
+            --border: #30363D;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+
+        .page-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-top: 2rem;
+        }
+
+        .page-title {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary) 0%, #4DD0E1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        .nav-back {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .nav-back:hover {
+            color: var(--primary);
+        }
+
+        .docs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .doc-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: block;
+        }
+
+        .doc-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px var(--primary-glow);
+            transform: translateY(-2px);
+        }
+
+        .doc-icon {
+            width: 48px;
+            height: 48px;
+            background: rgba(0, 188, 212, 0.1);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+
+        .doc-icon i {
+            color: var(--primary);
+            font-size: 1.25rem;
+        }
+
+        .doc-title {
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 1.125rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .doc-desc {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: var(--text-primary);
+        }
+
+        .quick-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .quick-link {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .quick-link:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <a href="../../Deployr_dashboard.html" class="nav-back"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+        <header class="page-header">
+            <h1 class="page-title">Documentation</h1>
+            <p style="color: var(--text-secondary);">Everything you need to integrate and operate Deployr</p>
+        </header>
+
+        <div class="docs-grid">
+            <a href="api.html" class="doc-card">
+                <div class="doc-icon"><i class="fas fa-code"></i></div>
+                <h3 class="doc-title">API Reference</h3>
+                <p class="doc-desc">Complete REST API documentation with endpoints, request/response formats, and
+                    authentication.</p>
+            </a>
+            <a href="sdks.html" class="doc-card">
+                <div class="doc-icon"><i class="fas fa-cubes"></i></div>
+                <h3 class="doc-title">SDKs & Integrations</h3>
+                <p class="doc-desc">Client libraries for Python, JavaScript, and Go. Plus integration guides for common
+                    tools.</p>
+            </a>
+            <a href="cli.html" class="doc-card">
+                <div class="doc-icon"><i class="fas fa-terminal"></i></div>
+                <h3 class="doc-title">CLI Tool</h3>
+                <p class="doc-desc">Command-line interface for managing incidents, viewing status, and triggering
+                    actions.</p>
+            </a>
+            <a href="security.html" class="doc-card">
+                <div class="doc-icon"><i class="fas fa-shield-halved"></i></div>
+                <h3 class="doc-title">Security Practices</h3>
+                <p class="doc-desc">Our security model, data handling practices, and compliance certifications.</p>
+            </a>
+        </div>
+
+        <section style="margin-bottom: 3rem;">
+            <h2 class="section-title">Getting Started</h2>
+            <div class="docs-grid">
+                <a href="#quickstart" class="doc-card">
+                    <div class="doc-icon"><i class="fas fa-rocket"></i></div>
+                    <h3 class="doc-title">Quick Start Guide</h3>
+                    <p class="doc-desc">Get up and running with Deployr in under 10 minutes.</p>
+                </a>
+                <a href="#installation" class="doc-card">
+                    <div class="doc-icon"><i class="fas fa-download"></i></div>
+                    <h3 class="doc-title">Installation</h3>
+                    <p class="doc-desc">Deploy via Docker Compose or Kubernetes Helm charts.</p>
+                </a>
+                <a href="#configuration" class="doc-card">
+                    <div class="doc-icon"><i class="fas fa-sliders"></i></div>
+                    <h3 class="doc-title">Configuration</h3>
+                    <p class="doc-desc">Environment variables, secrets management, and advanced options.</p>
+                </a>
+            </div>
+        </section>
+
+        <section>
+            <h2 class="section-title">Quick Links</h2>
+            <div class="quick-links">
+                <a href="#prometheus" class="quick-link">Prometheus Integration</a>
+                <a href="#slack" class="quick-link">Slack Setup</a>
+                <a href="#kubernetes" class="quick-link">Kubernetes Actions</a>
+                <a href="#runbooks" class="quick-link">Custom Runbooks</a>
+                <a href="#authentication" class="quick-link">Authentication</a>
+                <a href="#webhooks" class="quick-link">Webhooks</a>
+                <a href="#rate-limits" class="quick-link">Rate Limits</a>
+                <a href="#troubleshooting" class="quick-link">Troubleshooting</a>
+            </div>
+        </section>
+    </div>
+</body>
+
+</html>

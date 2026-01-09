@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Status - Deployr</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00BCD4;
+            --bg-dark: #0D1117;
+            --bg-darker: #010409;
+            --bg-card: #161B22;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B8C4CE;
+            --text-muted: #64748B;
+            --border: #30363D;
+            --success: #22C55E;
+            --warning: #F59E0B;
+            --error: #EF4444;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+
+        .page-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .nav-back {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .nav-back:hover {
+            color: var(--primary);
+        }
+
+        .status-header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 3rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .status-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.operational {
+            background: var(--success);
+        }
+
+        .status-dot.degraded {
+            background: var(--warning);
+        }
+
+        .status-dot.outage {
+            background: var(--error);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .status-text.operational {
+            color: var(--success);
+        }
+
+        .last-updated {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-top: 1rem;
+        }
+
+        .component-list {
+            margin-bottom: 3rem;
+        }
+
+        .component-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.25rem 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            margin-bottom: 0.5rem;
+            border-radius: 8px;
+        }
+
+        .component-name {
+            font-weight: 500;
+        }
+
+        .component-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .component-status.operational {
+            color: var(--success);
+        }
+
+        .component-status.operational::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .incident-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .incident-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .incident-title {
+            font-weight: 600;
+        }
+
+        .incident-date {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .incident-body {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .no-incidents {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <a href="../Deployr_dashboard.html" class="nav-back"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+        <div class="status-header">
+            <div class="status-indicator">
+                <span class="status-dot operational"></span>
+                <span class="status-text operational">All Systems Operational</span>
+            </div>
+            <p class="last-updated">Last updated: <span id="last-update"></span></p>
+        </div>
+
+        <section class="component-list">
+            <h2 class="section-title">Components</h2>
+            <div class="component-item">
+                <span class="component-name">API</span>
+                <span class="component-status operational">Operational</span>
+            </div>
+            <div class="component-item">
+                <span class="component-name">Dashboard</span>
+                <span class="component-status operational">Operational</span>
+            </div>
+            <div class="component-item">
+                <span class="component-name">Anomaly Detection</span>
+                <span class="component-status operational">Operational</span>
+            </div>
+            <div class="component-item">
+                <span class="component-name">AI Analysis (Ollama)</span>
+                <span class="component-status operational">Operational</span>
+            </div>
+            <div class="component-item">
+                <span class="component-name">Action Executor</span>
+                <span class="component-status operational">Operational</span>
+            </div>
+            <div class="component-item">
+                <span class="component-name">Slack Integration</span>
+                <span class="component-status operational">Operational</span>
+            </div>
+            <div class="component-item">
+                <span class="component-name">Cloud Cost Integration</span>
+                <span class="component-status operational">Operational</span>
+            </div>
+        </section>
+
+        <section>
+            <h2 class="section-title">Recent Incidents</h2>
+            <div class="no-incidents">
+                <i class="fas fa-check-circle"
+                    style="font-size: 2rem; color: var(--success); margin-bottom: 1rem; display: block;"></i>
+                No incidents reported in the last 90 days
+            </div>
+        </section>
+    </div>
+
+    <script>
+        document.getElementById('last-update').textContent = new Date().toLocaleString();
+    </script>
+</body>
+
+</html>

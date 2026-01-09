@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Features - Deployr AI DevOps Autopilot</title>
+    <meta name="description" content="Explore Deployr's comprehensive feature set for automated DevOps operations.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00BCD4;
+            --primary-dark: #0097A7;
+            --primary-light: #4DD0E1;
+            --primary-glow: rgba(0, 188, 212, 0.4);
+            --bg-dark: #0D1117;
+            --bg-darker: #010409;
+            --bg-card: #161B22;
+            --bg-elevated: #21262D;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B8C4CE;
+            --text-muted: #64748B;
+            --border: #30363D;
+            --success: #22C55E;
+            --warning: #F59E0B;
+            --error: #EF4444;
+            --info: #3B82F6;
+            --purple: #A855F7;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+        }
+
+        .page-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 4rem;
+            padding-top: 2rem;
+        }
+
+        .page-title {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 1.25rem;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+
+        .nav-back {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            transition: color 0.2s ease;
+        }
+
+        .nav-back:hover {
+            color: var(--primary);
+        }
+
+        .feature-category {
+            margin-bottom: 3rem;
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding-left: 1rem;
+            border-left: 4px solid var(--primary);
+        }
+
+        .category-icon {
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .feature-item {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+        }
+
+        .feature-item h4 {
+            color: var(--text-primary);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .feature-item p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .badge-new {
+            background: rgba(0, 188, 212, 0.2);
+            color: var(--primary);
+        }
+
+        .badge-beta {
+            background: rgba(168, 85, 247, 0.2);
+            color: var(--purple);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <a href="../Deployr_dashboard.html" class="nav-back"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+        <header class="page-header">
+            <h1 class="page-title">Features</h1>
+            <p class="page-subtitle">Everything you need for autonomous DevOps operations</p>
+        </header>
+
+        <!-- Detection & Monitoring -->
+        <div class="feature-category">
+            <div class="category-header">
+                <i class="fas fa-radar category-icon"></i>
+                <h2 class="section-title" style="margin-bottom: 0;">Detection & Monitoring</h2>
+            </div>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <h4>Statistical Anomaly Detection</h4>
+                    <p>Z-score based detection with rolling baselines that adapt to your system's normal behavior
+                        patterns.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>Log Analysis</h4>
+                    <p>Pattern recognition for error spikes, rate anomalies, and log-based alerting with context
+                        extraction.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>Metric Streaming</h4>
+                    <p>Real-time ingestion of Prometheus metrics with automatic baseline calculation and trend analysis.
+                    </p>
+                </div>
+                <div class="feature-item">
+                    <h4>Deployment Correlation</h4>
+                    <p>Automatic correlation of anomalies with recent deployments to identify change-related incidents.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Analysis -->
+        <div class="feature-category">
+            <div class="category-header">
+                <i class="fas fa-brain category-icon"></i>
+                <h2 class="section-title" style="margin-bottom: 0;">AI-Powered Analysis</h2>
+            </div>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <h4>Local LLM Integration</h4>
+                    <p>Ollama-powered analysis keeps your data on-premises. Supports Llama, Mistral, and custom models.
+                    </p>
+                </div>
+                <div class="feature-item">
+                    <h4>Root Cause Analysis</h4>
+                    <p>AI-generated diagnosis that considers metrics, logs, and recent changes to identify probable
+                        causes.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>Remediation Suggestions</h4>
+                    <p>Context-aware action recommendations ranked by confidence and potential impact.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>Senior Knowledge Base <span class="badge badge-new">NEW</span></h4>
+                    <p>Embedded operational patterns from experienced SREs for common infrastructure scenarios.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Autonomous Actions -->
+        <div class="feature-category">
+            <div class="category-header">
+                <i class="fas fa-bolt category-icon"></i>
+                <h2 class="section-title" style="margin-bottom: 0;">Autonomous Actions</h2>
+            </div>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <h4>Kubernetes Actions</h4>
+                    <p>Pod restarts, HPA adjustments, resource scaling, and rollback operations with safety checks.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>Database Actions</h4>
+                    <p>Connection pool adjustments, query killing, and replication management for PostgreSQL and MySQL.
+                    </p>
+                </div>
+                <div class="feature-item">
+                    <h4>Cloud Provider Actions</h4>
+                    <p>EC2/VM restart, ASG scaling, and resource cleanup across AWS, Azure, and GCP.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>Custom Runbooks</h4>
+                    <p>Define your own remediation scripts with parameter validation and execution tracking.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Safety & Control -->
+        <div class="feature-category">
+            <div class="category-header">
+                <i class="fas fa-shield-halved category-icon"></i>
+                <h2 class="section-title" style="margin-bottom: 0;">Safety & Control</h2>
+            </div>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <h4>Approval Workflow</h4>
+                    <p>Slack integration for human-in-the-loop approval with one-click approve/reject buttons.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>Blast Radius Limits</h4>
+                    <p>Maximum percentage of resources that can be affected by any single action.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>Rate Limiting</h4>
+                    <p>Configurable action frequency limits to prevent runaway automation.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>Automatic Rollback</h4>
+                    <p>Actions that worsen metrics are automatically reversed with full audit logging.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cost Management -->
+        <div class="feature-category">
+            <div class="category-header">
+                <i class="fas fa-coins category-icon"></i>
+                <h2 class="section-title" style="margin-bottom: 0;">Cost Management</h2>
+            </div>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <h4>Multi-Cloud Cost View</h4>
+                    <p>Unified dashboard for AWS, Azure, and GCP spend with service-level breakdown.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>Anomaly Alerts</h4>
+                    <p>Automatic detection of cost spikes with attribution to specific resources or services.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>Optimization Recommendations</h4>
+                    <p>AI-generated suggestions for rightsizing, reserved instance coverage, and zombie resource
+                        cleanup.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>Budget Thresholds <span class="badge badge-beta">BETA</span></h4>
+                    <p>Configurable alerts at 50%, 75%, 90%, and 100% of monthly budget.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Integrations -->
+        <div class="feature-category">
+            <div class="category-header">
+                <i class="fas fa-plug category-icon"></i>
+                <h2 class="section-title" style="margin-bottom: 0;">Integrations</h2>
+            </div>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <h4>Prometheus</h4>
+                    <p>Native remote write endpoint for metrics ingestion with automatic service discovery.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>Slack</h4>
+                    <p>Rich incident notifications with interactive buttons for approval workflow.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>GitHub</h4>
+                    <p>Deployment tracking via webhooks for change correlation.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>Kubernetes</h4>
+                    <p>Direct API integration for pod management and kubectl-equivalent operations.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

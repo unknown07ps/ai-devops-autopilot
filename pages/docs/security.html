@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Practices - Deployr</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00BCD4;
+            --bg-dark: #0D1117;
+            --bg-darker: #010409;
+            --bg-card: #161B22;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B8C4CE;
+            --text-muted: #64748B;
+            --border: #30363D;
+            --success: #22C55E;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+
+        .page-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-top: 2rem;
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary) 0%, #4DD0E1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        .nav-back {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .nav-back:hover {
+            color: var(--primary);
+        }
+
+        .section {
+            margin-bottom: 3rem;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .section-title i {
+            color: var(--primary);
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .card h4 {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .card p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .check-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .check-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .check-list li:last-child {
+            border-bottom: none;
+        }
+
+        .check-list li i {
+            color: var(--success);
+            margin-top: 0.25rem;
+        }
+
+        .check-list li span {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .badge-section {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+
+        .compliance-badge {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .compliance-badge.pending {
+            opacity: 0.6;
+        }
+
+        .compliance-badge span {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <a href="index.html" class="nav-back"><i class="fas fa-arrow-left"></i> Back to Docs</a>
+
+        <header class="page-header">
+            <h1 class="page-title">Security Practices</h1>
+            <p style="color: var(--text-secondary);">How we protect your data and infrastructure</p>
+        </header>
+
+        <section class="section">
+            <h2 class="section-title"><i class="fas fa-lock"></i> Data Protection</h2>
+            <div class="card">
+                <ul class="check-list">
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span><strong>Encryption at Rest:</strong> All stored data is encrypted using AES-256.</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span><strong>Encryption in Transit:</strong> All API communications use TLS 1.3.</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span><strong>Local AI Processing:</strong> Ollama runs locally—your data never leaves your
+                            infrastructure.</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span><strong>Secrets Management:</strong> API keys and credentials stored in encrypted
+                            environment variables.</span>
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title"><i class="fas fa-user-shield"></i> Access Control</h2>
+            <div class="card">
+                <ul class="check-list">
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span><strong>JWT Authentication:</strong> Secure token-based authentication with configurable
+                            expiration.</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span><strong>Role-Based Access:</strong> Admin, Operator, and Viewer roles with granular
+                            permissions.</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span><strong>Session Management:</strong> Secure session handling with ability to revoke all
+                            active sessions.</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span><strong>Rate Limiting:</strong> Protection against brute force and API abuse.</span>
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title"><i class="fas fa-shield-halved"></i> Infrastructure Security</h2>
+            <div class="card">
+                <ul class="check-list">
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span><strong>Container Isolation:</strong> Each component runs in isolated Docker
+                            containers.</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span><strong>Non-Root Execution:</strong> All services run as non-privileged users.</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span><strong>Network Segmentation:</strong> Internal services communicate over private networks
+                            only.</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span><strong>Dependency Scanning:</strong> Regular vulnerability scans of all
+                            dependencies.</span>
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title"><i class="fas fa-clipboard-check"></i> Audit & Compliance</h2>
+            <div class="card">
+                <ul class="check-list">
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span><strong>Comprehensive Logging:</strong> All API requests and actions are logged with
+                            timestamps.</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span><strong>Audit Trail:</strong> Complete history of who approved/rejected which
+                            actions.</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span><strong>Distributed Tracing:</strong> Request correlation across services for
+                            debugging.</span>
+                    </li>
+                </ul>
+            </div>
+
+            <h3 style="font-weight: 600; margin: 1.5rem 0 1rem;">Compliance Certifications</h3>
+            <div class="badge-section">
+                <div class="compliance-badge pending">
+                    <i class="fas fa-certificate" style="color: var(--text-muted);"></i>
+                    <span>SOC 2 Type II (In Progress)</span>
+                </div>
+                <div class="compliance-badge pending">
+                    <i class="fas fa-certificate" style="color: var(--text-muted);"></i>
+                    <span>ISO 27001 (Planned)</span>
+                </div>
+                <div class="compliance-badge">
+                    <i class="fas fa-certificate" style="color: var(--success);"></i>
+                    <span>GDPR Compliant</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title"><i class="fas fa-bug"></i> Vulnerability Disclosure</h2>
+            <div class="card">
+                <h4>Report Security Issues</h4>
+                <p>If you discover a security vulnerability, please report it responsibly to <a
+                        href="mailto:security@deployr.com" style="color: var(--primary);">security@deployr.com</a>. We
+                    will respond within 24 hours and work with you to address the issue.</p>
+            </div>
+        </section>
+    </div>
+</body>
+
+</html>

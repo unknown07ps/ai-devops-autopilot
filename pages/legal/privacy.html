@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - Deployr</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --primary: #00BCD4;
+            --bg-dark: #0D1117;
+            --bg-darker: #010409;
+            --bg-card: #161B22;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B8C4CE;
+            --text-muted: #64748B;
+            --border: #30363D;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+
+        .page-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+            padding-top: 2rem;
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+
+        .last-updated {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .nav-back {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .nav-back:hover {
+            color: var(--primary);
+        }
+
+        .content {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+        }
+
+        .content h2 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin: 2rem 0 1rem;
+            color: var(--text-primary);
+        }
+
+        .content h2:first-child {
+            margin-top: 0;
+        }
+
+        .content p,
+        .content li {
+            color: var(--text-secondary);
+            line-height: 1.8;
+            margin-bottom: 1rem;
+        }
+
+        .content ul {
+            padding-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <a href="../../Deployr_dashboard.html" class="nav-back">← Back to Dashboard</a>
+
+        <header class="page-header">
+            <h1 class="page-title">Privacy Policy</h1>
+            <p class="last-updated">Last updated: January 2026</p>
+        </header>
+
+        <div class="content">
+            <h2>1. Introduction</h2>
+            <p>Deployr ("we", "our", "us") is committed to protecting your privacy. This Privacy Policy explains how we
+                collect, use, disclose, and safeguard your information when you use our AI DevOps Autopilot platform.
+            </p>
+
+            <h2>2. Information We Collect</h2>
+            <p>We collect information that you provide directly to us:</p>
+            <ul>
+                <li><strong>Account Information:</strong> Email address, name, and password when you create an account.
+                </li>
+                <li><strong>Payment Information:</strong> Billing details processed through our payment provider
+                    (Razorpay). We do not store full payment card numbers.</li>
+                <li><strong>Infrastructure Data:</strong> Metrics, logs, and deployment information you send to our
+                    platform for analysis.</li>
+                <li><strong>Usage Data:</strong> How you interact with our dashboard and features.</li>
+            </ul>
+
+            <h2>3. How We Use Your Information</h2>
+            <ul>
+                <li>To provide, maintain, and improve our services</li>
+                <li>To process transactions and send related information</li>
+                <li>To detect anomalies and provide AI-powered recommendations</li>
+                <li>To send technical notices, updates, and security alerts</li>
+                <li>To respond to your comments, questions, and support requests</li>
+            </ul>
+
+            <h2>4. Data Processing Location</h2>
+            <p>Our platform is designed with privacy-first architecture. When using local LLM inference (Ollama), your
+                infrastructure data is processed entirely within your own environment and never leaves your
+                infrastructure.</p>
+            <p>For cloud-hosted deployments, data may be processed in data centers located in India and the United
+                States.</p>
+
+            <h2>5. Data Retention</h2>
+            <p>We retain your data for as long as your account is active or as needed to provide you services. You may
+                request deletion of your data at any time by contacting us.</p>
+
+            <h2>6. Data Security</h2>
+            <p>We implement appropriate technical and organizational measures to protect your data, including:</p>
+            <ul>
+                <li>Encryption at rest (AES-256) and in transit (TLS 1.3)</li>
+                <li>Access controls and authentication</li>
+                <li>Regular security assessments</li>
+            </ul>
+
+            <h2>7. Your Rights</h2>
+            <p>You have the right to:</p>
+            <ul>
+                <li>Access your personal data</li>
+                <li>Correct inaccurate data</li>
+                <li>Request deletion of your data</li>
+                <li>Export your data in a portable format</li>
+                <li>Withdraw consent at any time</li>
+            </ul>
+
+            <h2>8. Contact Us</h2>
+            <p>If you have questions about this Privacy Policy, please contact us at <a
+                    href="mailto:privacy@deployr.com" style="color: var(--primary);">privacy@deployr.com</a></p>
+        </div>
+    </div>
+</body>
+
+</html>

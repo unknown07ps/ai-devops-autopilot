@@ -375,6 +375,7 @@ async def confirm_password_reset(
 @router.post("/send-verification-email")
 @limiter.limit("5/minute")  # Prevent email spam
 async def send_verification_email(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):

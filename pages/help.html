@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Help Center - Deployr</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00BCD4;
+            --primary-glow: rgba(0, 188, 212, 0.4);
+            --bg-dark: #0D1117;
+            --bg-darker: #010409;
+            --bg-card: #161B22;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B8C4CE;
+            --text-muted: #64748B;
+            --border: #30363D;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+
+        .page-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-top: 2rem;
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+        }
+
+        .nav-back {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .nav-back:hover {
+            color: var(--primary);
+        }
+
+        .search-box {
+            max-width: 500px;
+            margin: 0 auto 3rem;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 1rem 1rem 1rem 3rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+        }
+
+        .help-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .help-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: block;
+        }
+
+        .help-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px var(--primary-glow);
+            transform: translateY(-2px);
+        }
+
+        .help-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: var(--primary);
+        }
+
+        .help-title {
+            color: var(--text-primary);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .help-desc {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .faq-section {
+            margin-bottom: 3rem;
+        }
+
+        .faq-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            padding: 1.25rem;
+        }
+
+        .faq-question {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .faq-answer {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .contact-bar {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <a href="../Deployr_dashboard.html" class="nav-back"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+        <header class="page-header">
+            <h1 class="page-title">Help Center</h1>
+            <p style="color: var(--text-secondary);">Find answers to common questions</p>
+        </header>
+
+        <div class="search-box">
+            <i class="fas fa-search search-icon"></i>
+            <input type="text" class="search-input" placeholder="Search for help...">
+        </div>
+
+        <section>
+            <h2 class="section-title">Browse by Topic</h2>
+            <div class="help-grid">
+                <a href="docs/index.html" class="help-card">
+                    <div class="help-icon"><i class="fas fa-rocket"></i></div>
+                    <h3 class="help-title">Getting Started</h3>
+                    <p class="help-desc">Installation, configuration, and first steps</p>
+                </a>
+                <a href="docs/api.html" class="help-card">
+                    <div class="help-icon"><i class="fas fa-code"></i></div>
+                    <h3 class="help-title">API & Integrations</h3>
+                    <p class="help-desc">Connect your tools and automate workflows</p>
+                </a>
+                <a href="#billing" class="help-card">
+                    <div class="help-icon"><i class="fas fa-credit-card"></i></div>
+                    <h3 class="help-title">Billing & Plans</h3>
+                    <p class="help-desc">Subscriptions, invoices, and upgrades</p>
+                </a>
+                <a href="docs/security.html" class="help-card">
+                    <div class="help-icon"><i class="fas fa-shield-halved"></i></div>
+                    <h3 class="help-title">Security</h3>
+                    <p class="help-desc">Authentication, permissions, and data protection</p>
+                </a>
+            </div>
+        </section>
+
+        <section class="faq-section">
+            <h2 class="section-title">Frequently Asked Questions</h2>
+            <div class="faq-item">
+                <div class="faq-question">How do I connect Prometheus to Deployr?</div>
+                <div class="faq-answer">Add Deployr as a remote_write target in your Prometheus configuration. See our
+                    documentation for the complete setup guide.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-question">Is my data sent to external servers?</div>
+                <div class="faq-answer">When using local LLM inference (Ollama), your data is processed entirely on your
+                    infrastructure. No data is sent externally unless you explicitly configure cloud features.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-question">Can I control which actions are auto-approved?</div>
+                <div class="faq-answer">Yes, you can configure auto-approval thresholds per action type. Start with
+                    manual approval for all actions and gradually enable auto-approval as you build trust.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-question">How do I reset my password?</div>
+                <div class="faq-answer">Click "Forgot Password" on the login page. You'll receive an email with a secure
+                    reset link valid for 24 hours.</div>
+            </div>
+        </section>
+
+        <div class="contact-bar">
+            <p style="margin-bottom: 0.5rem; font-weight: 600;">Still need help?</p>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Contact us at <a href="mailto:support@deployr.com"
+                    style="color: var(--primary);">support@deployr.com</a></p>
+        </div>
+    </div>
+</body>
+
+</html>

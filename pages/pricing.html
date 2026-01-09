@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing - Deployr AI DevOps Autopilot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00BCD4;
+            --primary-glow: rgba(0, 188, 212, 0.4);
+            --bg-dark: #0D1117;
+            --bg-darker: #010409;
+            --bg-card: #161B22;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B8C4CE;
+            --text-muted: #64748B;
+            --border: #30363D;
+            --success: #22C55E;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+
+        .page-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 4rem;
+            padding-top: 2rem;
+        }
+
+        .page-title {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary) 0%, #4DD0E1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 1.25rem;
+        }
+
+        .nav-back {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .nav-back:hover {
+            color: var(--primary);
+        }
+
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 4rem;
+        }
+
+        .pricing-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .pricing-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 30px var(--primary-glow);
+            transform: translateY(-4px);
+        }
+
+        .pricing-card.featured {
+            border-color: var(--primary);
+        }
+
+        .pricing-card.featured::before {
+            content: 'MOST POPULAR';
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary);
+            color: #000;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.25rem 1rem;
+            border-radius: 20px;
+        }
+
+        .plan-name {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .plan-price {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .plan-price span {
+            font-size: 1rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .plan-desc {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin-bottom: 2rem;
+        }
+
+        .feature-list li {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .feature-list li i {
+            color: var(--success);
+            width: 16px;
+        }
+
+        .feature-list li.disabled {
+            color: var(--text-muted);
+        }
+
+        .feature-list li.disabled i {
+            color: var(--text-muted);
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 0.875rem;
+            background: var(--primary);
+            color: #000;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        .btn-secondary {
+            width: 100%;
+            padding: 0.875rem;
+            background: transparent;
+            color: var(--primary);
+            font-weight: 600;
+            border: 1px solid var(--primary);
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .faq-section {
+            margin-top: 4rem;
+        }
+
+        .faq-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .faq-item h4 {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .faq-item p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <a href="../Deployr_dashboard.html" class="nav-back"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+        <header class="page-header">
+            <h1 class="page-title">Pricing</h1>
+            <p class="page-subtitle">Simple, transparent pricing for teams of all sizes</p>
+        </header>
+
+        <div class="pricing-grid">
+            <!-- Free Tier -->
+            <div class="pricing-card">
+                <h3 class="plan-name">Free</h3>
+                <div class="plan-price">₹0 <span>/ month</span></div>
+                <p class="plan-desc">For individuals and small projects</p>
+                <ul class="feature-list">
+                    <li><i class="fas fa-check"></i> 1 monitored service</li>
+                    <li><i class="fas fa-check"></i> Basic anomaly detection</li>
+                    <li><i class="fas fa-check"></i> 7-day data retention</li>
+                    <li><i class="fas fa-check"></i> Community support</li>
+                    <li class="disabled"><i class="fas fa-times"></i> AI analysis</li>
+                    <li class="disabled"><i class="fas fa-times"></i> Autonomous actions</li>
+                    <li class="disabled"><i class="fas fa-times"></i> Cloud cost integration</li>
+                </ul>
+                <button class="btn-secondary">Current Plan</button>
+            </div>
+
+            <!-- Pro Tier -->
+            <div class="pricing-card featured">
+                <h3 class="plan-name">Pro</h3>
+                <div class="plan-price">₹2,499 <span>/ month</span></div>
+                <p class="plan-desc">For growing teams and startups</p>
+                <ul class="feature-list">
+                    <li><i class="fas fa-check"></i> 10 monitored services</li>
+                    <li><i class="fas fa-check"></i> Advanced anomaly detection</li>
+                    <li><i class="fas fa-check"></i> 30-day data retention</li>
+                    <li><i class="fas fa-check"></i> AI-powered analysis</li>
+                    <li><i class="fas fa-check"></i> Supervised actions</li>
+                    <li><i class="fas fa-check"></i> Slack integration</li>
+                    <li><i class="fas fa-check"></i> Email support</li>
+                </ul>
+                <button class="btn-primary">Upgrade to Pro</button>
+            </div>
+
+            <!-- Enterprise Tier -->
+            <div class="pricing-card">
+                <h3 class="plan-name">Enterprise</h3>
+                <div class="plan-price">₹9,999 <span>/ month</span></div>
+                <p class="plan-desc">For large organizations</p>
+                <ul class="feature-list">
+                    <li><i class="fas fa-check"></i> Unlimited services</li>
+                    <li><i class="fas fa-check"></i> ML-based detection</li>
+                    <li><i class="fas fa-check"></i> 1-year data retention</li>
+                    <li><i class="fas fa-check"></i> Autonomous actions</li>
+                    <li><i class="fas fa-check"></i> Multi-cloud cost management</li>
+                    <li><i class="fas fa-check"></i> Custom runbooks</li>
+                    <li><i class="fas fa-check"></i> Dedicated support</li>
+                    <li><i class="fas fa-check"></i> SLA guarantees</li>
+                </ul>
+                <button class="btn-primary">Contact Sales</button>
+            </div>
+        </div>
+
+        <!-- FAQ -->
+        <section class="faq-section">
+            <h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; text-align: center;">Frequently Asked
+                Questions</h2>
+            <div class="faq-item">
+                <h4>Can I switch plans anytime?</h4>
+                <p>Yes, you can upgrade or downgrade your plan at any time. Changes take effect at the start of your
+                    next billing cycle.</p>
+            </div>
+            <div class="faq-item">
+                <h4>What payment methods do you accept?</h4>
+                <p>We accept all major credit cards, debit cards, UPI, and net banking through our payment partner
+                    Razorpay.</p>
+            </div>
+            <div class="faq-item">
+                <h4>Is there a free trial for paid plans?</h4>
+                <p>Yes, Pro and Enterprise plans include a 14-day free trial. No credit card required to start.</p>
+            </div>
+            <div class="faq-item">
+                <h4>Do you offer discounts for annual billing?</h4>
+                <p>Yes, annual plans receive a 20% discount compared to monthly billing.</p>
+            </div>
+        </section>
+    </div>
+</body>
+
+</html>
