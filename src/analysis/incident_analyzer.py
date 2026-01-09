@@ -655,8 +655,8 @@ class IncidentAnalyzer:
             data = self.redis.get(f"incident_analysis:{incident_id}")
             if data:
                 return IncidentAnalysis(**json.loads(data))
-        except:
-            pass
+        except (json.JSONDecodeError, Exception) as e:
+            logger.debug(f"Error getting analysis: {e}")
         return None
 
 

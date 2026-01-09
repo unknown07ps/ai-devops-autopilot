@@ -1,0 +1,139 @@
+# ============================================================
+# Deployr - Test Environment Docker Compose
+# ============================================================
+# Isolated environment for testing - uses different ports
+# Usage: docker-compose -f docker-compose.test.yml up --build
+# ============================================================
+
+version: '3.8'
+
+services:
+  # --------------------------------------------------------
+  # Test PostgreSQL (Port 5433 - isolated from production)
+  # --------------------------------------------------------
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: deployr-postgres-test
+    environment:
+      POSTGRES_DB: deployr_test
+      POSTGRES_USER: deployr_test
+      POSTGRES_PASSWORD: test_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deployr_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - deployr-test-network
+
+  # --------------------------------------------------------
+  # Test Redis (Port 6380 - isolated from production)
+  # --------------------------------------------------------
+  redis-test:
+    image: redis:7-alpine
+    container_name: deployr-redis-test
+    command: redis-server --appendonly yes
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_test_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - deployr-test-network
+
+  # --------------------------------------------------------
+  # Test API (Port 8001 - isolated from production)
+  # --------------------------------------------------------
+  api-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: deployr-api-test
+    ports:
+      - "8001:8000"
+    environment:
+      - DATABASE_URL=postgresql://deployr_test:test_password@postgres-test:5432/deployr_test
+      - REDIS_URL=redis://redis-test:6379
+      - JWT_SECRET_KEY=test-jwt-secret-key
+      - ENVIRONMENT=test
+      - LOG_LEVEL=DEBUG
+      - DRY_RUN_MODE=true
+      - USE_MOCK_LLM=true
+    depends_on:
+      redis-test:
+        condition: service_healthy
+      postgres-test:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src:ro
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --log-level debug
+    networks:
+      - deployr-test-network
+
+  # --------------------------------------------------------
+  # OWASP ZAP Security Scanner
+  # --------------------------------------------------------
+  zap:
+    image: ghcr.io/zaproxy/zaproxy:stable
+    container_name: deployr-zap
+    depends_on:
+      - api-test
+    volumes:
+      - ./tests/security:/zap/wrk:rw
+    command: zap-baseline.py -t http://api-test:8000 -r zap_report.html -I
+    networks:
+      - deployr-test-network
+
+  # --------------------------------------------------------
+  # Playwright Test Runner
+  # --------------------------------------------------------
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.40.0-jammy
+    container_name: deployr-playwright
+    depends_on:
+      - api-test
+    volumes:
+      - ./tests/e2e:/tests:ro
+      - ./tests/results:/results:rw
+    working_dir: /tests
+    environment:
+      - BASE_URL=http://api-test:8000
+      - CI=true
+    command: npx playwright test --reporter=html
+    networks:
+      - deployr-test-network
+
+  # --------------------------------------------------------
+  # Newman (Postman CLI) API Tester
+  # --------------------------------------------------------
+  newman:
+    image: postman/newman:alpine
+    container_name: deployr-newman
+    depends_on:
+      - api-test
+    volumes:
+      - ./tests/postman:/etc/newman:ro
+      - ./tests/results:/results:rw
+    command: >
+      run /etc/newman/deployr_api_tests.json
+      --environment /etc/newman/test_environment.json
+      --reporters cli,htmlextra
+      --reporter-htmlextra-export /results/newman_report.html
+    networks:
+      - deployr-test-network
+
+volumes:
+  postgres_test_data:
+  redis_test_data:
+
+networks:
+  deployr-test-network:
+    driver: bridge

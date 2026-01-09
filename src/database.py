@@ -9,11 +9,14 @@ from contextlib import contextmanager
 import os
 from typing import Generator
 
-# Database URL from environment
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://deployr:deployr1374@localhost:5432/deployr"
-)
+# Database URL from environment - REQUIRED
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError(
+        "DATABASE_URL environment variable is required.\n"
+        "Example: DATABASE_URL=postgresql://user:password@localhost:5432/dbname\n"
+        "Set this in your .env file or environment before starting the application."
+    )
 
 # Create engine with connection pooling
 engine = create_engine(

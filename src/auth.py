@@ -10,7 +10,6 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import Optional
-import secrets
 import os
 
 from src.models import User, Session as DBSession, Subscription
@@ -20,7 +19,17 @@ from src.database import get_db
 # Configuration
 # ============================================================================
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", secrets.token_urlsafe(32))
+# JWT Secret Key - REQUIRED for stable token signing
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError(
+        "JWT_SECRET_KEY environment variable is required.\n"
+        "Generate a key with: python -c \"import secrets; print(secrets.token_urlsafe(32))\"\n"
+        "Set this in your .env file. Without a stable key:\n"
+        "  - All sessions invalidate on server restart\n"
+        "  - Multi-instance deployments will have token verification failures"
+    )
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 1 hour
 REFRESH_TOKEN_EXPIRE_DAYS = 30
@@ -278,17 +287,8 @@ def revoke_session(db: Session, session_id: str, user_id: str) -> bool:
     
     return False
 
-def revoke_all_sessions(db: Session, user_id: str):
-    """Revoke all sessions for a user (logout everywhere)"""
-    db.query(DBSession).filter(DBSession.user_id == user_id).delete()
-    db.commit()
-
-def cleanup_expired_sessions(db: Session):
-    """Remove expired sessions (run periodically)"""
-    db.query(DBSession).filter(
-        DBSession.expires_at < datetime.now(timezone.utc)
-    ).delete()
-    db.commit()
+# Note: revoke_all_sessions and cleanup_expired_sessions are defined in the
+# "Session Management" section at the end of this file with proper error handling
 
 # ============================================================================
 # User Registration

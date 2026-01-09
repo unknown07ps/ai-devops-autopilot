@@ -705,7 +705,7 @@ class CrossToolDecisionLayer:
                 decision = json.loads(d)
                 if decision.get("requires_approval") and not decision.get("executed_at"):
                     pending.append(decision)
-            except:
+            except json.JSONDecodeError:
                 continue
         
         return pending
@@ -736,7 +736,7 @@ class CrossToolDecisionLayer:
                         executed += 1
                     elif decision.get("requires_approval"):
                         pending += 1
-                except:
+                except json.JSONDecodeError:
                     continue
             
             return {

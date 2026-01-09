@@ -180,15 +180,15 @@ class AlertNoiseSuppressor:
             data = self.redis.get("alert_outcomes")
             if data:
                 self.alert_outcomes = json.loads(data)
-        except:
-            pass
+        except (json.JSONDecodeError, Exception) as e:
+            logger.debug(f"[SUPPRESS] Error loading outcomes: {e}")
     
     def _save_outcomes(self):
         """Save historical alert outcomes"""
         try:
             self.redis.set("alert_outcomes", json.dumps(self.alert_outcomes))
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"[SUPPRESS] Error saving outcomes: {e}")
     
     def triage_alert(self, alert: AlertContext) -> TriageDecision:
         """
@@ -353,8 +353,8 @@ class AlertNoiseSuppressor:
             if window:
                 end_time = float(window)
                 return datetime.now(timezone.utc).timestamp() < end_time
-        except:
-            pass
+        except (ValueError, TypeError, Exception) as e:
+            logger.debug(f"[SUPPRESS] Error checking maintenance: {e}")
         
         return False
     
@@ -481,7 +481,7 @@ class AlertNoiseSuppressor:
         try:
             count = self.redis.get(f"alert_count_24h:{fingerprint}")
             return int(count) if count else 0
-        except:
+        except (ValueError, TypeError):
             return 0
     
     def _get_recommended_action(self, alert: AlertContext) -> Optional[str]:
@@ -552,8 +552,8 @@ class AlertNoiseSuppressor:
                 3600,  # 1 hour
                 json.dumps(asdict(group))
             )
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"[SUPPRESS] Error saving group: {e}")
     
     def record_outcome(
         self,
@@ -606,7 +606,8 @@ class AlertNoiseSuppressor:
         try:
             stats_data = self.redis.get("suppression_stats")
             stats = json.loads(stats_data) if stats_data else {}
-        except:
+        except (json.JSONDecodeError, Exception) as e:
+            logger.debug(f"[SUPPRESS] Error loading stats: {e}")
             stats = {}
         
         # Calculate outcome rates

@@ -1,7 +1,6 @@
 import httpx
-import json
-from typing import Dict, Optional
-from datetime import datetime
+from typing import Dict, List
+from datetime import datetime, timezone
 
 class SlackNotifier:
     """
@@ -50,7 +49,7 @@ class SlackNotifier:
                     "fields": [
                         {
                             "type": "mrkdwn",
-                            "text": f"*Detected at:*\n{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}"
+                            "text": f"*Detected at:*\n{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
                         },
                         {
                             "type": "mrkdwn",

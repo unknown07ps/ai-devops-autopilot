@@ -210,7 +210,7 @@ JSON Response:"""
             if start != -1 and end != 0:
                 try:
                     return json.loads(text[start:end])
-                except:
+                except json.JSONDecodeError:
                     pass
             
             # Last resort - return structured fallback
@@ -290,5 +290,5 @@ JSON Response:"""
         """Clean up HTTP client"""
         try:
             self.client.close()
-        except:
+        except Exception:
             pass

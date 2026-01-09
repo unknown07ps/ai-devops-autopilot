@@ -56,7 +56,7 @@ class ActionAnalytics:
                 daily_stats[date]["total"] += 1
                 if action.get("result", {}).get("success"):
                     daily_stats[date]["success"] += 1
-            except:
+            except (ValueError, TypeError):
                 continue
         
         trend_data = []
@@ -100,7 +100,7 @@ class ActionAnalytics:
                 incident_time = datetime.fromisoformat(recorded_at.replace('Z', '+00:00'))
                 if incident_time < cutoff:
                     continue
-            except:
+            except (ValueError, TypeError):
                 continue
             
             resolution_time = incident.get("resolution_time_seconds", 0)
@@ -213,7 +213,7 @@ class ActionAnalytics:
                 by_confidence[confidence_bucket]["total"] += 1
                 if outcome.get("success"):
                     by_confidence[confidence_bucket]["success"] += 1
-            except:
+            except json.JSONDecodeError:
                 continue
         
         return {
@@ -350,11 +350,11 @@ class ActionAnalytics:
                             action_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
                             if action_time < cutoff:
                                 continue
-                        except:
+                        except (ValueError, TypeError):
                             pass
                     
                     actions.append(action)
-                except:
+                except json.JSONDecodeError:
                     continue
         
         return actions
@@ -451,5 +451,5 @@ class ActionAnalytics:
             if end and action_time >= end:
                 return False
             return True
-        except:
+        except (ValueError, TypeError):
             return False

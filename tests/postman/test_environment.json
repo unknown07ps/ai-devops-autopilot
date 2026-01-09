@@ -1,0 +1,26 @@
+{
+    "id": "deployr-test-env",
+    "name": "Deployr Test Environment",
+    "values": [
+        {
+            "key": "baseUrl",
+            "value": "http://localhost:8001",
+            "enabled": true
+        },
+        {
+            "key": "testEmail",
+            "value": "test@deployr.test",
+            "enabled": true
+        },
+        {
+            "key": "testPassword",
+            "value": "TestPassword123!",
+            "enabled": true
+        },
+        {
+            "key": "accessToken",
+            "value": "",
+            "enabled": true
+        }
+    ]
+}

@@ -499,7 +499,7 @@ class LearningEngine:
             try:
                 outcomes_raw = self.redis.lrange(f"learning:outcomes:{pattern_id}", 0, -1)
                 outcomes = [json.loads(o) for o in outcomes_raw]
-            except:
+            except (json.JSONDecodeError, Exception):
                 outcomes = []
             
             data.append({

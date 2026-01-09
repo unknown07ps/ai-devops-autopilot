@@ -153,7 +153,7 @@ class IncidentWorker:
                             if level in ['ERROR', 'CRITICAL']:
                                 error_counts[service] = error_counts.get(service, 0) + 1
                                 print(f"[ERROR LOG] {service}: {log_data.get('message', '')[:80]}")
-                        except:
+                        except json.JSONDecodeError:
                             continue
                     
                     processed_count[service] = current_count
@@ -305,11 +305,12 @@ class IncidentWorker:
                     
                     if log_time.replace(tzinfo=None) > cutoff_time.replace(tzinfo=None):
                         logs.append(log)
-                except:
+                except (json.JSONDecodeError, KeyError, ValueError):
                     continue
             
             return logs
-        except:
+        except (redis.RedisError, Exception) as e:
+            print(f"[WORKER] Error getting recent logs: {e}")
             return []
     
     def _get_recent_deployments(self, service: str, minutes: int = 30) -> List[Dict]:
@@ -333,7 +334,8 @@ class IncidentWorker:
                 })
             
             return deployments
-        except:
+        except (redis.RedisError, Exception) as e:
+            print(f"[WORKER] Error getting recent deployments: {e}")
             return []
     
     def _store_incident(self, service: str, analysis: Dict, anomalies: List[Dict]):

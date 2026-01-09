@@ -123,6 +123,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-deployr}:${POSTGRES_PASSWORD:-deployr_password}@postgres:5432/${POSTGRES_DB:-deployr}
       - REDIS_URL=redis://redis:6379
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-this-in-production}
       - OLLAMA_BASE_URL=http://ollama:11434
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
@@ -153,6 +154,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-deployr}:${POSTGRES_PASSWORD:-deployr_password}@postgres:5432/${POSTGRES_DB:-deployr}
       - REDIS_URL=redis://redis:6379
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-this-in-production}
       - OLLAMA_BASE_URL=http://ollama:11434
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}

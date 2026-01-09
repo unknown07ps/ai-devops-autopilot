@@ -6,7 +6,7 @@ Adds approval buttons and rich interactions
 import httpx
 import json
 from typing import Dict, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 class InteractiveSlackNotifier:
     """
@@ -63,7 +63,7 @@ class InteractiveSlackNotifier:
                         },
                         {
                             "type": "mrkdwn",
-                            "text": f"*Detected:*\n{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}"
+                            "text": f"*Detected:*\n{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
                         },
                         {
                             "type": "mrkdwn",

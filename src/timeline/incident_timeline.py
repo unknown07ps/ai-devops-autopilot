@@ -182,7 +182,7 @@ class IncidentTimelineGenerator:
         
         try:
             start_time = datetime.fromisoformat(incident_time.replace("Z", "+00:00"))
-        except:
+        except (ValueError, TypeError):
             start_time = datetime.now(timezone.utc)
         
         # Collect events from all sources
@@ -261,7 +261,7 @@ class IncidentTimelineGenerator:
                 first_time = datetime.fromisoformat(all_events[0]["timestamp"].replace("Z", "+00:00"))
                 last_time = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
                 duration = (last_time - first_time).total_seconds() / 60
-            except:
+            except (ValueError, TypeError):
                 pass
         
         # Build timeline
@@ -301,8 +301,8 @@ class IncidentTimelineGenerator:
             data = self.redis.get(f"incident:{incident_id}")
             if data:
                 return json.loads(data)
-        except:
-            pass
+        except (json.JSONDecodeError, Exception) as e:
+            logger.debug(f"[TIMELINE] Error getting incident: {e}")
         return None
     
     def _get_deployment_events(
@@ -392,7 +392,7 @@ class IncidentTimelineGenerator:
                     )
                     events.append(asdict(event))
                     
-                except:
+                except json.JSONDecodeError:
                     continue
                     
         except Exception as e:
@@ -437,7 +437,7 @@ class IncidentTimelineGenerator:
                     )
                     events.append(asdict(event))
                     
-                except:
+                except json.JSONDecodeError:
                     continue
                     
         except Exception as e:
@@ -497,7 +497,7 @@ class IncidentTimelineGenerator:
                                 actor_type="automation" if action.get("auto_executed") else "human"
                             )))
                             
-                except:
+                except (json.JSONDecodeError, KeyError):
                     continue
                     
         except Exception as e:
@@ -545,7 +545,7 @@ class IncidentTimelineGenerator:
                     )
                     events.append(asdict(event))
                     
-                except:
+                except json.JSONDecodeError:
                     continue
                     
         except Exception as e:
@@ -593,7 +593,7 @@ class IncidentTimelineGenerator:
                     )
                     events.append(asdict(event))
                     
-                except:
+                except json.JSONDecodeError:
                     continue
                     
         except Exception as e:
@@ -725,8 +725,8 @@ class IncidentTimelineGenerator:
             data = self.redis.get(f"incident_timeline:{incident_id}")
             if data:
                 return IncidentTimeline(**json.loads(data))
-        except:
-            pass
+        except (json.JSONDecodeError, Exception) as e:
+            logger.debug(f"[TIMELINE] Error getting timeline: {e}")
         return None
     
     def format_timeline_markdown(self, timeline: IncidentTimeline) -> str:

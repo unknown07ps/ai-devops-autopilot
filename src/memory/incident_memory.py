@@ -293,7 +293,7 @@ class IncidentMemory:
                 '+inf'
             )
             return len(deployments) > 0
-        except:
+        except Exception:
             return False
     
     def _is_recent(self, timestamp: str, days: int = 7) -> bool:

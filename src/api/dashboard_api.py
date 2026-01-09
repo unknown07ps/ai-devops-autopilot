@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Dict, Optional
-from datetime import datetime, timedelta
+from typing import Optional
+from datetime import datetime, timedelta, timezone
 import redis
 import json
 import os
@@ -27,7 +26,7 @@ async def get_dashboard_stats():
                 incident = json.loads(incident_json)
                 # Check if incident is recent (last 24h) and not resolved
                 incident_time = datetime.fromisoformat(incident['timestamp'].replace('Z', '+00:00'))
-                if (datetime.utcnow() - incident_time.replace(tzinfo=None)) < timedelta(hours=24):
+                if (datetime.now(timezone.utc) - incident_time.replace(tzinfo=None)) < timedelta(hours=24):
                     if incident.get('status', 'active') == 'active':
                         active_incidents += 1
         
@@ -41,7 +40,7 @@ async def get_dashboard_stats():
                 anomaly = json.loads(anomaly_json)
                 if anomaly.get('severity') in ['critical', 'high']:
                     anomaly_time = datetime.fromisoformat(anomaly['detected_at'].replace('Z', '+00:00'))
-                    if (datetime.utcnow() - anomaly_time.replace(tzinfo=None)) < timedelta(hours=24):
+                    if (datetime.now(timezone.utc) - anomaly_time.replace(tzinfo=None)) < timedelta(hours=24):
                         critical_anomalies += 1
         
         # Count healthy services
@@ -110,7 +109,7 @@ async def get_incidents(
                 if 'status' not in incident:
                     # Check if incident is old enough to be considered resolved
                     incident_time = datetime.fromisoformat(incident['timestamp'].replace('Z', '+00:00'))
-                    time_since = datetime.utcnow() - incident_time.replace(tzinfo=None)
+                    time_since = datetime.now(timezone.utc) - incident_time.replace(tzinfo=None)
                     incident['status'] = 'resolved' if time_since > timedelta(hours=1) else 'active'
                 
                 # Filter by status if specified
@@ -196,7 +195,7 @@ async def get_anomalies(
                     'z_score': anomaly.get('z_score', 0),
                     'deviation_percent': anomaly.get('deviation_percent', 0),
                     'severity': anomaly.get('severity', 'unknown'),
-                    'detected_at': anomaly.get('detected_at', datetime.utcnow().isoformat())
+                    'detected_at': anomaly.get('detected_at', datetime.now(timezone.utc).isoformat())
                 })
         
         # Sort by timestamp (most recent first)
@@ -283,7 +282,7 @@ async def get_services():
             for incident_json in incidents:
                 incident = json.loads(incident_json)
                 incident_time = datetime.fromisoformat(incident['timestamp'].replace('Z', '+00:00'))
-                if (datetime.utcnow() - incident_time.replace(tzinfo=None)) < timedelta(hours=24):
+                if (datetime.now(timezone.utc) - incident_time.replace(tzinfo=None)) < timedelta(hours=24):
                     recent_incidents += 1
             
             services_data[service_name]['incident_count'] = recent_incidents
@@ -339,7 +338,7 @@ async def resolve_incident(incident_id: str):
             incident = json.loads(incident_json)
             if incident.get('id', f"{service_name}_{incident['timestamp']}") == incident_id:
                 incident['status'] = 'resolved'
-                incident['resolved_at'] = datetime.utcnow().isoformat()
+                incident['resolved_at'] = datetime.now(timezone.utc).isoformat()
                 
                 # Update in Redis
                 redis_client.lset(incident_key, i, json.dumps(incident))
@@ -378,7 +377,7 @@ async def get_metrics_timeseries(
         
         # Create time series (mock timestamps for now)
         timeseries = []
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         for i, value in enumerate(values[-100:]):  # Last 100 values
             timestamp = (now - timedelta(minutes=100-i)).isoformat()

@@ -365,8 +365,8 @@ class SecurityMonitor:
             try:
                 self.redis.lpush("security_alerts", json.dumps(alert))
                 self.redis.ltrim("security_alerts", 0, 999)
-            except:
-                pass
+            except (redis.RedisError, Exception) as e:
+                print(f"[SECURITY] Error storing alert: {e}")
         
         # Log prominently
         print(f"[SECURITY ALERT] 🚨 {alert_type}")
@@ -427,8 +427,8 @@ class SecurityMonitor:
             try:
                 alerts = self.redis.lrange("security_alerts", 0, limit - 1)
                 return [json.loads(a) for a in alerts]
-            except:
-                pass
+            except (redis.RedisError, json.JSONDecodeError) as e:
+                print(f"[SECURITY] Error getting alerts: {e}")
         
         return []
     

@@ -407,7 +407,7 @@ class RunbookEngine:
             
             # Basic eval (in production, use a safe expression parser)
             return eval(condition, {"__builtins__": {}}, safe_context)
-        except:
+        except Exception:
             return True  # Default to true if condition can't be evaluated
     
     def _interpolate_params(self, params: Dict, execution_state: Dict) -> Dict:

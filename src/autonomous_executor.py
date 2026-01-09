@@ -462,7 +462,9 @@ class AutonomousExecutor:
                 return 'degraded'
             else:
                 return 'healthy'
-        except:
+        except (redis.RedisError, json.JSONDecodeError, Exception) as e:
+            # Log error for debugging but don't crash
+            print(f"[AUTONOMOUS] Health check error: {e}")
             return 'unknown'
     
     def _calculate_blast_radius(self, action: Dict) -> float:
@@ -685,8 +687,9 @@ class AutonomousExecutor:
                 },
                 'is_night_mode_active': self._is_night_hours() if self.execution_mode == ExecutionMode.NIGHT_MODE else None
             }
-        except:
+        except (redis.RedisError, json.JSONDecodeError, Exception) as e:
+            print(f"[AUTONOMOUS] Stats retrieval error: {e}")
             return {
                 'execution_mode': self.execution_mode.value,
-                'error': 'Failed to get stats'
+                'error': f'Failed to get stats: {str(e)}'
             }

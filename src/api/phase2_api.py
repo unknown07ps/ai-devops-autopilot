@@ -3,13 +3,15 @@ Phase 2 API Endpoints
 Action management, approval workflow, and learning insights
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel
 from typing import List, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import redis
 import json
 import os
+
+from src.rate_limiting import limiter
 
 router = APIRouter(prefix="/api/v2", tags=["phase2"])
 
@@ -54,7 +56,8 @@ async def get_pending_actions(limit: int = 20):
 
 
 @router.post("/actions/approve")
-async def approve_action(approval: ActionApproval, background_tasks: BackgroundTasks):
+@limiter.limit("30/minute")  # Action approval rate limit
+async def approve_action(request: Request, approval: ActionApproval, background_tasks: BackgroundTasks):
     """
     Approve an action for execution
     """
@@ -74,7 +77,7 @@ async def approve_action(approval: ActionApproval, background_tasks: BackgroundT
         # Update action
         action['status'] = 'approved'
         action['approved_by'] = approval.approved_by
-        action['approved_at'] = datetime.utcnow().isoformat()
+        action['approved_at'] = datetime.now(timezone.utc).isoformat()
         if approval.notes:
             action['approval_notes'] = approval.notes
         
@@ -100,7 +103,8 @@ async def approve_action(approval: ActionApproval, background_tasks: BackgroundT
 
 
 @router.post("/actions/reject")
-async def reject_action(approval: ActionApproval):
+@limiter.limit("30/minute")  # Action rejection rate limit
+async def reject_action(request: Request, approval: ActionApproval):
     """
     Reject a proposed action
     """
@@ -112,7 +116,7 @@ async def reject_action(approval: ActionApproval):
         action = json.loads(action_data)
         action['status'] = 'rejected'
         action['rejected_by'] = approval.approved_by
-        action['rejected_at'] = datetime.utcnow().isoformat()
+        action['rejected_at'] = datetime.now(timezone.utc).isoformat()
         if approval.notes:
             action['rejection_reason'] = approval.notes
         
@@ -465,7 +469,8 @@ async def get_configuration():
 
 
 @router.post("/config/auto-approve")
-async def update_auto_approve(enabled: bool):
+@limiter.limit("10/minute")  # Config changes rate limit
+async def update_auto_approve(request: Request, enabled: bool):
     """
     Enable/disable auto-approval of low-risk actions
     """

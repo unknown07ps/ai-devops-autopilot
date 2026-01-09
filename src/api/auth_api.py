@@ -20,6 +20,7 @@ from src.auth import (
 )
 from src.models import User
 from src.subscription_service import get_usage_limits
+from src.rate_limiting import limiter
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 security = HTTPBearer()
@@ -125,9 +126,10 @@ class LogoutRequest(BaseModel):
 # ============================================================================
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("3/minute")  # Prevent spam registrations
 async def register(
     request: RegisterRequest,
-    http_request: Request,
+    http_request: Request,  # Required for rate limiting
     db: Session = Depends(get_db)
 ):
     """
@@ -170,6 +172,7 @@ async def register(
         )
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("5/minute")  # Prevent brute force attacks
 async def login(
     request: LoginRequest,
     http_request: Request,
@@ -314,6 +317,7 @@ async def update_profile(
 # ============================================================================
 
 @router.post("/password-reset-request")
+@limiter.limit("3/minute")  # Prevent email spam
 async def request_password_reset(
     request: PasswordResetRequest,
     db: Session = Depends(get_db)
@@ -369,6 +373,7 @@ async def confirm_password_reset(
 # ============================================================================
 
 @router.post("/send-verification-email")
+@limiter.limit("5/minute")  # Prevent email spam
 async def send_verification_email(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)

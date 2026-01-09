@@ -693,7 +693,7 @@ class SeniorKnowledgeEngine:
                     age_minutes = (datetime.now(timezone.utc).timestamp() - deploy_ts) / 60
                     enriched["deployment_age_minutes"] = age_minutes
                     enriched["recent_deployment"] = age_minutes < 15
-            except:
+            except Exception:
                 pass
         
         return enriched

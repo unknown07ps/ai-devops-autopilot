@@ -299,7 +299,7 @@ class DeploymentRiskAnalyzer:
                     data = json.loads(entry)
                     if data.get("failed") or data.get("rolled_back"):
                         failures += 1
-                except:
+                except json.JSONDecodeError:
                     continue
             
             failure_rate = (failures / total * 100) if total > 0 else 0
@@ -449,7 +449,7 @@ class DeploymentRiskAnalyzer:
                         is_minor = True
                     else:
                         is_patch = True
-            except:
+            except (IndexError, ValueError):
                 pass
         
         # Base score on change type
@@ -560,7 +560,7 @@ class DeploymentRiskAnalyzer:
                 anomalies = self.redis.lrange(f"recent_anomalies:{dep}", 0, 4)
                 if len(anomalies) >= 3:
                     unhealthy_deps.append(dep)
-            except:
+            except Exception:
                 pass
         
         if len(unhealthy_deps) == 0:
@@ -608,7 +608,7 @@ class DeploymentRiskAnalyzer:
                         inc = json.loads(inc_data)
                         if inc.get("recorded_at", "") > cutoff:
                             recent_count += 1
-                except:
+                except (json.JSONDecodeError, AttributeError):
                     continue
             
             if recent_count == 0:
@@ -710,10 +710,10 @@ class DeploymentRiskAnalyzer:
                     data = json.loads(entry)
                     if data.get("failed") or data.get("rolled_back"):
                         failures += 1
-                except:
+                except json.JSONDecodeError:
                     continue
             return failures
-        except:
+        except Exception:
             return 0
     
     def _get_avg_recovery_time(self, service: str) -> float:
@@ -729,11 +729,11 @@ class DeploymentRiskAnalyzer:
                         inc = json.loads(inc_data)
                         if inc.get("resolution_time_seconds"):
                             recovery_times.append(inc["resolution_time_seconds"] / 60)
-                except:
+                except (json.JSONDecodeError, AttributeError, KeyError):
                     continue
             
             return sum(recovery_times) / len(recovery_times) if recovery_times else 0
-        except:
+        except Exception:
             return 0
     
     def _store_assessment(self, assessment: DeploymentRiskAssessment):
@@ -821,7 +821,7 @@ class DeploymentRiskAnalyzer:
                 for a in assessments:
                     try:
                         all_assessments.append(json.loads(a))
-                    except:
+                    except json.JSONDecodeError:
                         continue
             
             if not all_assessments:

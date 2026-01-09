@@ -190,58 +190,88 @@ async def razorpay_webhook(
     """
     Handle Razorpay webhooks
     Events: subscription.activated, subscription.charged, payment.captured, etc.
+    
+    Security: Strict signature verification with explicit failure logging
     """
+    import logging
+    logger = logging.getLogger("razorpay.webhook")
+    
     # Get raw body and signature
     payload = await request.body()
     signature = request.headers.get("X-Razorpay-Signature")
     
+    # Log incoming webhook for audit (without sensitive data)
+    client_ip = request.client.host if request.client else "unknown"
+    logger.info(f"[RAZORPAY WEBHOOK] Incoming from IP: {client_ip}")
+    
+    # SECURITY: Explicit signature validation failure handling
     if not signature:
+        logger.warning(f"[RAZORPAY WEBHOOK SECURITY] Missing signature from IP: {client_ip}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Missing signature"
         )
     
-    # Verify signature
-    if not verify_razorpay_signature(payload, signature, RAZORPAY_WEBHOOK_SECRET):
+    # Verify signature with explicit failure logging
+    try:
+        is_valid = verify_razorpay_signature(payload, signature, RAZORPAY_WEBHOOK_SECRET)
+    except Exception as sig_error:
+        logger.error(f"[RAZORPAY WEBHOOK SECURITY] Signature verification error from IP: {client_ip}: {sig_error}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Signature verification failed"
+        )
+    
+    if not is_valid:
+        logger.warning(f"[RAZORPAY WEBHOOK SECURITY] Invalid signature from IP: {client_ip}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid signature"
         )
     
-    # Parse event
+    # Parse event - separate from signature validation
     try:
         event_data = json.loads(payload)
-        event_type = event_data.get("event")
-        
-        print(f"[RAZORPAY WEBHOOK] Received event: {event_type}")
-        
-        # Route to appropriate handler
-        handlers = {
-            "subscription.authenticated": handle_subscription_authenticated,
-            "subscription.activated": handle_subscription_activated,
-            "subscription.charged": handle_subscription_charged,
-            "payment.captured": handle_payment_captured,
-            "subscription.cancelled": handle_subscription_cancelled,
-            "subscription.paused": handle_subscription_paused,
-        }
-        
-        handler = handlers.get(event_type)
-        if handler:
+    except json.JSONDecodeError as json_error:
+        logger.error(f"[RAZORPAY WEBHOOK] Invalid JSON payload: {json_error}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid JSON payload"
+        )
+    
+    event_type = event_data.get("event")
+    logger.info(f"[RAZORPAY WEBHOOK] Processing event: {event_type}")
+    
+    # Route to appropriate handler
+    handlers = {
+        "subscription.authenticated": handle_subscription_authenticated,
+        "subscription.activated": handle_subscription_activated,
+        "subscription.charged": handle_subscription_charged,
+        "payment.captured": handle_payment_captured,
+        "subscription.cancelled": handle_subscription_cancelled,
+        "subscription.paused": handle_subscription_paused,
+    }
+    
+    handler = handlers.get(event_type)
+    if handler:
+        try:
             success = handler(db, event_data)
             if success:
+                logger.info(f"[RAZORPAY WEBHOOK] Successfully processed: {event_type}")
                 return {"status": "success", "event": event_type}
             else:
+                logger.warning(f"[RAZORPAY WEBHOOK] Handler returned failure for: {event_type}")
                 return {"status": "failed", "event": event_type}
-        else:
-            print(f"[RAZORPAY WEBHOOK] Unhandled event: {event_type}")
-            return {"status": "ignored", "event": event_type}
-    
-    except Exception as e:
-        print(f"[RAZORPAY WEBHOOK ERROR] {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
+        except Exception as handler_error:
+            logger.error(f"[RAZORPAY WEBHOOK] Handler error for {event_type}: {handler_error}")
+            # Don't expose internal errors - return generic message
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Webhook processing failed"
+            )
+    else:
+        logger.debug(f"[RAZORPAY WEBHOOK] Unhandled event type: {event_type}")
+        return {"status": "ignored", "event": event_type}
 
 # ============================================================================
 # Subscription Management

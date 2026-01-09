@@ -258,14 +258,16 @@ class MTTRAccelerator:
             try:
                 logs = self.redis.lrange(f"logs:{service}", 0, 99)
                 return [json.loads(l) for l in logs]
-            except:
+            except (json.JSONDecodeError, Exception) as e:
+                logger.debug(f"[MTTR] Error getting logs: {e}")
                 return []
         
         async def get_metrics():
             try:
                 metrics = self.redis.get(f"metrics:{service}")
                 return json.loads(metrics) if metrics else {}
-            except:
+            except (json.JSONDecodeError, Exception) as e:
+                logger.debug(f"[MTTR] Error getting metrics: {e}")
                 return {}
         
         async def get_deployments():
@@ -276,14 +278,16 @@ class MTTRAccelerator:
                     "+inf"
                 )
                 return [d.decode() if isinstance(d, bytes) else d for d in deploys]
-            except:
+            except Exception as e:
+                logger.debug(f"[MTTR] Error getting deployments: {e}")
                 return []
         
         async def get_alerts():
             try:
                 alerts = self.redis.lrange(f"alerts:{service}", 0, 49)
                 return [json.loads(a) for a in alerts]
-            except:
+            except (json.JSONDecodeError, Exception) as e:
+                logger.debug(f"[MTTR] Error getting alerts: {e}")
                 return []
         
         # Run all data gathering in parallel

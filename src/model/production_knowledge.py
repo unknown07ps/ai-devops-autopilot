@@ -509,7 +509,7 @@ class ProductionKnowledgeModel:
                         "message": f"Service not updated in {hours_since_update:.0f} hours",
                         "severity": "warning"
                     })
-            except:
+            except (ValueError, TypeError):
                 pass
             
             # Check for high error rate drift

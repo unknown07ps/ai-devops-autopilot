@@ -262,8 +262,8 @@ class ActionRecorder:
             key = f"action_records:by_pattern:{record.pattern_id}:{record.action_type}"
             similar_ids = self.redis.lrange(key, 0, 4)
             similar = [id.decode() if isinstance(id, bytes) else id for id in similar_ids]
-        except:
-            pass
+        except Exception as e:
+            print(f"Error finding similar actions: {e}")
         return similar
     
     def _save_active_record(self, record: ActionRecord):
@@ -283,16 +283,16 @@ class ActionRecorder:
             data = self.redis.get(f"action_records:active:{record_id}")
             if data:
                 return ActionRecord(**json.loads(data))
-        except:
-            pass
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"Error loading active record: {e}")
         return None
     
     def _remove_active_record(self, record_id: str):
         """Remove active record from Redis"""
         try:
             self.redis.delete(f"action_records:active:{record_id}")
-        except:
-            pass
+        except Exception as e:
+            print(f"Error removing active record: {e}")
     
     def _store_completed_record(self, record: ActionRecord):
         """Store completed record in Redis"""
@@ -338,8 +338,8 @@ class ActionRecorder:
             data = self.redis.get(f"action_records:completed:{record_id}")
             if data:
                 return ActionRecord(**json.loads(data))
-        except:
-            pass
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"Error getting record: {e}")
         return None
     
     def get_records_for_incident(self, incident_id: str) -> List[ActionRecord]:
@@ -352,8 +352,8 @@ class ActionRecorder:
                 record = self.get_record(rid)
                 if record:
                     records.append(record)
-        except:
-            pass
+        except Exception as e:
+            print(f"Error getting records for incident: {e}")
         return records
     
     def get_pattern_effectiveness(self, pattern_id: str, action_type: str = None) -> Dict:
@@ -388,7 +388,8 @@ class ActionRecorder:
                 "success_rate": successes / total if total > 0 else 0,
                 "avg_effectiveness": total_effectiveness / total if total > 0 else 0
             }
-        except:
+        except Exception as e:
+            print(f"Error getting pattern effectiveness: {e}")
             return {"total": 0, "success_rate": 0, "avg_effectiveness": 0}
     
     def get_action_replay(self, record_id: str) -> Dict:
@@ -453,8 +454,8 @@ class ActionRecorder:
                         export_data.append(asdict(record))
                 
                 current += timedelta(days=1)
-        except:
-            pass
+        except Exception as e:
+            print(f"Error exporting training data: {e}")
         
         return export_data
     
@@ -473,7 +474,8 @@ class ActionRecorder:
                 "autonomous_actions": self._count_autonomous_actions(),
                 "avg_execution_time_seconds": self._get_avg_execution_time()
             }
-        except:
+        except Exception as e:
+            print(f"Error getting stats summary: {e}")
             return {"total_actions_recorded": 0}
     
     def _count_autonomous_actions(self) -> int:

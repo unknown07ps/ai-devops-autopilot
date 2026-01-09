@@ -20,6 +20,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Initialize structured logging (must be before other imports that log)
+from src.logging_config import get_logger, setup_logging
+logger = get_logger(__name__)
+
 # Import database and authentication
 from src.database import get_db, init_db, engine, get_db_context
 from src.auth import get_current_user, get_current_active_subscription, cleanup_expired_sessions
@@ -377,6 +381,26 @@ app.include_router(razorpay_router)
 app.include_router(dashboard_router)
 app.include_router(suppression_router)
 
+# Include new modular routers
+from src.api.health_api import router as health_router, configure as configure_health
+from src.api.ingestion_api import router as ingestion_router, configure as configure_ingestion
+from src.api.cloud_api import router as cloud_router
+from src.api.intelligence_api import router as intelligence_router, configure as configure_intelligence
+from src.api.logs_api import router as logs_router, configure as configure_logs
+
+# Configure routers with shared dependencies
+configure_health(redis_client, scheduler, AUTONOMOUS_ENABLED)
+configure_ingestion(redis_client)
+configure_intelligence(redis_client)
+configure_logs(redis_client)
+
+# Register new routers
+app.include_router(health_router)
+app.include_router(ingestion_router)
+app.include_router(cloud_router)
+app.include_router(intelligence_router)
+app.include_router(logs_router)
+
 # ============================================================================
 # Data Models
 # ============================================================================
@@ -415,6 +439,59 @@ class LearningWeightsUpdate(BaseModel):
     rule_weight: Optional[float] = None
     ai_weight: Optional[float] = None
     historical_weight: Optional[float] = None
+
+
+# Input validation models for API endpoints
+class CreatePendingActionRequest(BaseModel):
+    """Request model for creating a pending action"""
+    id: Optional[str] = None
+    incident_id: Optional[str] = None
+    action_type: str = "investigate"
+    service: str = "unknown"
+    reasoning: str = ""
+    risk: str = "medium"
+    status: str = "pending_review"
+    proposed_at: Optional[str] = None
+    proposed_by: str = "manual_request"
+    incident_details: Dict[str, Any] = {}
+
+
+class CreateAutonomousOutcomeRequest(BaseModel):
+    """Request model for storing autonomous action outcomes"""
+    action_id: Optional[str] = None
+    action_type: str = "auto_resolve"
+    service: str = "unknown"
+    success: bool = True
+    confidence: int = 85
+    reason: str = ""
+    timestamp: Optional[str] = None
+    incident_id: Optional[str] = None
+    executed_by: str = "AI Autopilot"
+
+
+class MarkIncidentResolvedRequest(BaseModel):
+    """Request model for marking an incident as resolved"""
+    incident_id: str  # Required field
+    mode: str = "autonomous"
+    service: str = "unknown"
+    resolved_by: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class CreateActionLogRequest(BaseModel):
+    """Request model for creating an action log entry"""
+    action_id: Optional[str] = None
+    incident_id: Optional[str] = None
+    action_type: str = "unknown"
+    mode: str = "manual"
+    service: str = "unknown"
+    status: str = "completed"
+    success: bool = True
+    confidence: Optional[int] = None
+    description: Optional[str] = None
+    reason: Optional[str] = None
+    execution_details: Optional[Dict[str, Any]] = None
+    executed_by: str = "dashboard_user"
 
 
 
@@ -716,22 +793,22 @@ async def get_pending_actions(limit: int = 20):
 
 
 @app.post("/api/v2/actions/pending")
-async def create_pending_action(data: dict):
+async def create_pending_action(data: CreatePendingActionRequest):
     """Create a pending action for manual resolution (persistent storage)"""
     try:
-        action_id = data.get("id") or f"action_{int(datetime.now(timezone.utc).timestamp())}"
+        action_id = data.id or f"action_{int(datetime.now(timezone.utc).timestamp())}"
         
         action = {
             "id": action_id,
-            "incident_id": data.get("incident_id"),
-            "action_type": data.get("action_type", "investigate"),
-            "service": data.get("service", "unknown"),
-            "reasoning": data.get("reasoning", ""),
-            "risk": data.get("risk", "medium"),
-            "status": data.get("status", "pending_review"),
-            "proposed_at": data.get("proposed_at", datetime.now(timezone.utc).isoformat()),
-            "proposed_by": data.get("proposed_by", "manual_request"),
-            "incident_details": data.get("incident_details", {})
+            "incident_id": data.incident_id,
+            "action_type": data.action_type,
+            "service": data.service,
+            "reasoning": data.reasoning,
+            "risk": data.risk,
+            "status": data.status,
+            "proposed_at": data.proposed_at or datetime.now(timezone.utc).isoformat(),
+            "proposed_by": data.proposed_by,
+            "incident_details": data.incident_details
         }
         
         # Store action data
@@ -1238,8 +1315,9 @@ async def get_action_history(
                     'executed_at': res.get('resolved_at'),
                     'execution_details': res.get('execution_details', {})
                 })
-            except:
-                pass
+            except json.JSONDecodeError:
+                # Skip malformed resolution data
+                continue
         
         # Include autonomous outcomes
         auto_outcomes = redis_client.lrange("autonomous_outcomes", 0, limit - 1)
@@ -1265,8 +1343,9 @@ async def get_action_history(
                         'proposed_at': out.get('timestamp'),
                         'executed_at': out.get('timestamp')
                     })
-            except:
-                pass
+            except json.JSONDecodeError:
+                # Skip malformed outcome data
+                continue
         
         # Sort by timestamp
         actions.sort(key=lambda x: x.get('proposed_at') or x.get('executed_at') or '', reverse=True)
@@ -1752,22 +1831,22 @@ async def get_autonomous_outcomes_public(
 
 
 @app.post("/api/v3/autonomous/outcomes")
-async def create_autonomous_outcome(data: dict):
+async def create_autonomous_outcome(data: CreateAutonomousOutcomeRequest):
     """Store an autonomous action outcome for persistent display"""
     try:
         now = datetime.now(timezone.utc)
         
         outcome = {
-            "action_id": data.get("action_id", f"outcome_{int(now.timestamp())}"),
-            "action_type": data.get("action_type", "auto_resolve"),
-            "service": data.get("service", "unknown"),
-            "success": data.get("success", True),
+            "action_id": data.action_id or f"outcome_{int(now.timestamp())}",
+            "action_type": data.action_type,
+            "service": data.service,
+            "success": data.success,
             "auto_executed": True,
-            "confidence": data.get("confidence", 85),
-            "reason": data.get("reason", ""),
-            "timestamp": data.get("timestamp", now.isoformat()),
-            "incident_id": data.get("incident_id"),
-            "executed_by": data.get("executed_by", "AI Autopilot")
+            "confidence": data.confidence,
+            "reason": data.reason,
+            "timestamp": data.timestamp or now.isoformat(),
+            "incident_id": data.incident_id,
+            "executed_by": data.executed_by
         }
         
         # Store in Redis (for autonomous outcomes list)
@@ -2319,8 +2398,9 @@ async def get_resolved_incidents(limit: int = 50):
             try:
                 inc = json.loads(inc_json)
                 resolved_list.append(inc)
-            except:
-                pass
+            except json.JSONDecodeError:
+                # Skip malformed incident data
+                continue
         
         return {"resolved_incidents": resolved_list, "total": len(resolved_list)}
     
@@ -2332,15 +2412,12 @@ async def get_resolved_incidents(limit: int = 50):
 from src.models import ResolvedIncident
 
 @app.post("/api/incidents/mark-resolved")
-async def mark_incident_resolved(data: dict):
+async def mark_incident_resolved(data: MarkIncidentResolvedRequest):
     """Mark an incident as resolved - stores in PostgreSQL for permanent persistence"""
     try:
-        incident_id = data.get("incident_id")
-        mode = data.get("mode", "autonomous")
-        service = data.get("service", "unknown")
-        
-        if not incident_id:
-            raise HTTPException(status_code=400, detail="incident_id required")
+        incident_id = data.incident_id
+        mode = data.mode
+        service = data.service
         
         now = datetime.now(timezone.utc)
         
@@ -2603,8 +2680,9 @@ async def get_mttr_stats():
                 res = json.loads(res_json)
                 exec_time = res.get("execution_details", {}).get("execution_time_ms", 1200)
                 total_time += exec_time
-            except:
-                pass
+            except json.JSONDecodeError:
+                # Skip malformed resolution data
+                continue
         
         if total_resolutions > 0:
             avg_resolution_time = total_time / total_resolutions
@@ -2701,8 +2779,9 @@ async def get_incident_timeline(incident_id: str):
                         "source": "ai_autopilot",
                         "severity": "info"
                     })
-            except:
-                pass
+            except json.JSONDecodeError:
+                # Skip malformed log data
+                continue
         
         # Sort by timestamp
         events.sort(key=lambda x: x.get("timestamp", ""), reverse=False)
@@ -2852,8 +2931,9 @@ async def get_logs(
                 if search and search.lower() not in str(log_entry).lower():
                     continue
                 redis_logs.append(log_entry)
-            except:
-                pass
+            except (json.JSONDecodeError, KeyError):
+                # Skip malformed or incomplete log entries
+                continue
         
         # Get audit logs
         audit_logs = redis_client.lrange("audit_log", 0, 99)
@@ -2884,8 +2964,9 @@ async def get_logs(
                 if search and search.lower() not in str(log_entry).lower():
                     continue
                 redis_logs.append(log_entry)
-            except:
-                pass
+            except (json.JSONDecodeError, KeyError):
+                # Skip malformed or incomplete log entries
+                continue
         
         # Combine and sort
         all_logs = logs + redis_logs
@@ -3170,12 +3251,11 @@ async def get_dashboard():
         with open('Deployr_dashboard.html', 'r', encoding='utf-8') as f:
             return f.read()
     except FileNotFoundError:
-        return """
-        <html><body style="font-family: sans-serif; padding: 40px; text-align: center;">
-        <h1>❌ Dashboard Not Found</h1>
-        <p>Please ensure <code>Deployr_dashboard.html</code> exists in the project root.</p>
-        </body></html>
-        """
+        try:
+            with open('templates/dashboard_not_found.html', 'r', encoding='utf-8') as f:
+                return f.read()
+        except FileNotFoundError:
+            return "<html><body><h1>Dashboard Not Found</h1></body></html>"
 
 @app.get("/dashboard/phase2", response_class=HTMLResponse)
 async def get_phase2_dashboard(user_id: Optional[str] = None):
@@ -3193,10 +3273,11 @@ async def get_phase2_dashboard(user_id: Optional[str] = None):
         
         return html_content
     except FileNotFoundError:
-        return """<html><body style="font-family: sans-serif; padding: 40px; text-align: center;">
-        <h1>❌ Phase 2 Dashboard Not Found</h1>
-        <p>Please ensure <code>dashboard_phase2.html</code> exists in the project root.</p>
-        <p><a href="/dashboard">← Back to Main Dashboard</a></p></body></html>"""
+        try:
+            with open('templates/phase2_not_found.html', 'r', encoding='utf-8') as f:
+                return f.read()
+        except FileNotFoundError:
+            return "<html><body><h1>Phase 2 Dashboard Not Found</h1></body></html>"
 
 # ============================================================================
 # PHASE 4 API ENDPOINTS - ENTERPRISE FEATURES

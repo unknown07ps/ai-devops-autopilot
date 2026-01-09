@@ -72,7 +72,7 @@ class OllamaProvider(BaseLLMProvider):
         try:
             response = await self.client.get(f"{self.base_url}/api/tags")
             return response.status_code == 200
-        except:
+        except (httpx.RequestError, httpx.TimeoutException):
             return False
     
     def _build_prompt(self, prompt: str, context: Dict = None) -> str:
@@ -91,7 +91,7 @@ class OllamaProvider(BaseLLMProvider):
             if json_match:
                 return json.loads(json_match.group())
             return {"raw_response": text}
-        except:
+        except json.JSONDecodeError:
             return {"raw_response": text}
 
 
@@ -156,7 +156,7 @@ class ClaudeProvider(BaseLLMProvider):
             if json_match:
                 return json.loads(json_match.group())
             return {"raw_response": text}
-        except:
+        except json.JSONDecodeError:
             return {"raw_response": text}
 
 
@@ -222,7 +222,7 @@ class OpenAIProvider(BaseLLMProvider):
             if json_match:
                 return json.loads(json_match.group())
             return {"raw_response": text}
-        except:
+        except json.JSONDecodeError:
             return {"raw_response": text}
 
 

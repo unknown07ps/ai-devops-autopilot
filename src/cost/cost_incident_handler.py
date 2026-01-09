@@ -180,8 +180,8 @@ class CloudCostIncidentHandler:
                         key = key.decode()
                     baseline = json.loads(data)
                     self.baselines[key] = CostBaseline(**baseline)
-            except:
-                pass
+            except (json.JSONDecodeError, Exception) as e:
+                logger.debug(f"[COST] Error loading baselines: {e}")
         
         # Default baselines if none loaded
         if not self.baselines:
@@ -630,7 +630,8 @@ class CloudCostIncidentHandler:
         try:
             incidents_data = self.redis.lrange("cost_incidents", 0, limit - 1)
             return [json.loads(i) for i in incidents_data]
-        except:
+        except (json.JSONDecodeError, Exception) as e:
+            logger.debug(f"[COST] Error getting incidents: {e}")
             return []
     
     def get_cost_stats(self) -> Dict:

@@ -409,7 +409,7 @@ class K8sActionExecutor:
                     data = json.loads(result.get("output", "{}"))
                     # Additional cleanup logic would go here
                     cleaned.append({"type": resource_type, "count": 0})
-                except:
+                except json.JSONDecodeError:
                     pass
         
         return {
@@ -513,7 +513,7 @@ class K8sActionExecutor:
         
         try:
             return int(result.get("output", "0").strip())
-        except:
+        except (ValueError, AttributeError):
             return 0
     
     def _record_action(self, action_type: K8sActionType, params: Dict, result: Dict):

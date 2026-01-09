@@ -3,16 +3,14 @@ User Suppression Rules API
 Allows users to configure their own alert suppression rules
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 from datetime import datetime, timezone
-from sqlalchemy.orm import Session
-import json
 
-from src.database import get_db
-from src.auth import get_current_user, get_current_active_subscription
+from src.auth import get_current_user
 from src.models import User
+from src.rate_limiting import limiter
 
 router = APIRouter(prefix="/api/suppression", tags=["Suppression Rules"])
 
@@ -127,7 +125,9 @@ async def get_suppression_rules(
 
 
 @router.put("/rules/{rule_id}")
+@limiter.limit("30/minute")  # Rule update rate limit
 async def update_suppression_rule(
+    request: Request,
     rule_id: str,
     update: SuppressionRuleUpdate,
     current_user: User = Depends(get_current_user)
@@ -153,7 +153,9 @@ async def update_suppression_rule(
 
 
 @router.post("/rules/{rule_id}/toggle")
+@limiter.limit("30/minute")  # Rule toggle rate limit
 async def toggle_suppression_rule(
+    request: Request,
     rule_id: str,
     current_user: User = Depends(get_current_user)
 ):
@@ -173,7 +175,9 @@ async def toggle_suppression_rule(
 
 
 @router.post("/maintenance")
+@limiter.limit("10/minute")  # Maintenance window rate limit
 async def set_maintenance_window(
+    request: Request,
     service: str,
     duration_minutes: int = 30,
     current_user: User = Depends(get_current_user)
